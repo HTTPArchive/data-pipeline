@@ -9,6 +9,7 @@ on:
       - '**.js'
       - '**.py'
   pull_request:
+    branches: [main]
     paths:
       - '**.js'
       - '**.py'
