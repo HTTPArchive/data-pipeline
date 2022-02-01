@@ -5,7 +5,11 @@ name: "Static Code Analysis"
 on:
   push:
     branches: [main]
+    paths:
+      - '**.js'
+      - '**.py'
   pull_request:
+    branches: [main]
     paths:
       - '**.js'
       - '**.py'
@@ -48,7 +52,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v1
         with:
-          config-file: ./.github/codeql/codeql-config.yml
+          # config-file: ./.github/codeql/codeql-config.yml
           queries: +security-and-quality
           setup-python-dependencies: false
           languages: '${{ matrix.language }}'
