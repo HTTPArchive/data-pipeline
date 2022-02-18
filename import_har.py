@@ -47,7 +47,6 @@ def run(argv=None):
                   # reshuffle to unlink dependent parallelism
                   # https://beam.apache.org/documentation/runtime/model/#parallelism
                   | 'Reshuffle' >> beam.Reshuffle()
-                  # | 'Parse' >> beam.Map(transformation.generate_pages)
                   | 'Parse' >> beam.ParDo(transformation.ImportHarJson())
                   | 'Log1' >> beam.Map(transformation.log_and_apply)
                   )
