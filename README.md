@@ -11,7 +11,7 @@ This Pub/Sub topic is used to monitor file creation events in Google Cloud Storg
 
 ```commandline
 gcloud pubsub topics create har-gcs
-gcloud pubsub subscriptions create har-gcs --topic=har-gcs-pipeline
+gcloud pubsub subscriptions create har-gcs-pipeline --topic=har-gcs
 ```
 
 # Run the pipeline
