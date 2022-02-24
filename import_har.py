@@ -32,8 +32,8 @@ def run(argv=None):
     pipeline_options = PipelineOptions(
         pipeline_args,
         project='httparchive',
-        staging_location='gs://httparchive/experimental/staging',
-        temp_location='gs://httparchive/experimental/temp'
+        staging_location='gs://httparchive/experimental/staging',  # TODO testing, move into run script
+        temp_location='gs://httparchive/experimental/temp'  # TODO testing, move into run script
     )
 
     # TODO log and persist execution arguments to storage for tracking
@@ -48,14 +48,16 @@ def run(argv=None):
                   # https://beam.apache.org/documentation/runtime/model/#parallelism
                   | 'Reshuffle' >> beam.Reshuffle()
                   | 'Parse' >> beam.ParDo(transformation.ImportHarJson())
-                  | 'Log1' >> beam.Map(transformation.log_and_apply)
+                  # | 'Log1' >> beam.Map(transformation.TestLogging.log_and_apply)
                   )
 
-        _ = parsed | 'Write' >> WriteToText(
+        # TODO consider removing this step
+        #  only used for temporary history/troubleshooting, not necessary when using WriteToBigQuery.Method.FILE_LOADS
+        _ = parsed | 'WriteToGCS' >> WriteToText(
             file_path_prefix=posixpath.join(known_args.output, 'page'),
             file_name_suffix='.jsonl')
 
-        _ = parsed | 'Load' >> WriteToBigQuery(
+        _ = parsed | 'WriteToBigQuery' >> WriteToBigQuery(
                     table='page',
                     dataset='experimental',
                     schema=bigquery.SCHEMA_AUTODETECT,
