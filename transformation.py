@@ -2,10 +2,13 @@ import datetime
 import hashlib
 import json
 import logging
+import re
 import uuid
 
 import apache_beam as beam
+from dateutil import parser as date_parser
 
+import constants
 import utils
 
 
@@ -21,7 +24,9 @@ class TestLogging(beam.DoFn):
 
 class ImportHarJson(beam.DoFn):
     def process(self, element):
-        return [self.generate_pages(element)]
+        page, requests = self.generate_pages(element)
+        yield beam.pvalue.TaggedOutput('page', page)
+        yield beam.pvalue.TaggedOutput('requests', requests)
 
     @staticmethod
     def generate_pages(element):
@@ -34,19 +39,19 @@ class ImportHarJson(beam.DoFn):
         }
 
         if not element:
-            logging.exception("HAR file read error.")
+            utils.log_exeption_and_raise("HAR file read error.")
 
-        har = json.loads(element)
-        if not har:
-            logging.exception("JSON decode failed")
+        try:
+            har = json.loads(element)
+        except Exception as exp:
+            utils.log_exeption_and_raise("JSON decode failed", exp)
 
         log = har['log']
         pages = log['pages']
         if len(pages) == 0:
-            logging.exception("No pages found")
+            utils.log_exeption_and_raise("No pages found")
 
         # STEP 1: Create a partial "page" record so we get a pageid.
-        # page = {k: v for k, v in ImportHarJson.import_page(pages[0], status_info).items() if v is not None}
         page = ImportHarJson.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
         # TODO revisit this ported logic
         # if not page:
@@ -55,8 +60,8 @@ class ImportHarJson(beam.DoFn):
         # STEP 2: Create all the resources & associate them with the pageid.
         entries = ImportHarJson.import_entries(log['entries'], page['pageid'], status_info)
         if not entries:
-            # TODO exception or error?
-            logging.exception("ImportEntries failed. Purging pageid $pageid")
+            # TODO raise exception or log error?
+            utils.log_exeption_and_raise("ImportEntries failed. Purging pageid $pageid")
 
         # else:
         # TODO 	// STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
@@ -72,7 +77,7 @@ class ImportHarJson(beam.DoFn):
         # }
         #
 
-        return page
+        return page, entries
 
     # TODO finish porting logic
     @staticmethod
@@ -81,10 +86,10 @@ class ImportHarJson(beam.DoFn):
         if status_info is None:
             status_info = {}
 
-        entries_transformed = []
+        requests = []
 
         for entry in entries:
-            ret = {
+            ret_request = {
                 'pageid': pageid,
                 'crawlid': status_info['crawlid'],
                 'startedDateTime': entry['startedDateTime'],  # we use this below for expAge calculation
@@ -95,124 +100,79 @@ class ImportHarJson(beam.DoFn):
 
             # REQUEST
             request = entry['request']
-            ret.update({
+            url = request['url']
+            request_headers, request_other_headers, request_cookie_size = utils.parse_header(
+                request['headers'], constants.ghReqHeaders, cookie_key='cookie')
+            ret_request.update({
                 'method': request['method'],
-                'httpVersion': request['httpVersion']
-            })
-
-            ret.update({
-                'url': request['url'],
-                'urlShort': request['url'][0:255],
+                'httpVersion': request['httpVersion'],
+                'url': url,
+                'urlShort': url[:255],
                 'reqHeadersSize': request.get('headersSize') if 0 < request.get('headersSize') else None,
-                'reqBodySize': request.get('bodySize') if 0 < request.get('bodySize') else None
+                'reqBodySize': request.get('bodySize') if 0 < request.get('bodySize') else None,
+                'reqOtherHeaders': request_other_headers,
+                'reqCookieLen': request_cookie_size
             })
 
-            headers = request['headers']
-            other = []
-            hHeaders = {}  # Headers can appear multiple times, so we have to concat them all then add them to avoid setting a column twice.
-            cookielen = 0
-            for header in headers:
-                name = header['name']
-                lc_name = name.lower()
-                value = header['value'][0:255]
-                orig_value = header['value']
-                if lc_name in utils.ghReqHeaders.keys():
-                    # This is one of the standard headers we want to save
-                    column = utils.ghReqHeaders[lc_name]
-                    if hHeaders.get(column):
-                        hHeaders[column].append(value)
-                    else:
-                        hHeaders[column] = [value]
-                elif 'cookie' == lc_name:
-                    # We don't save the Cookie header, just the size.
-                    cookielen += len(orig_value)
-                else:
-                    other.append("{} = {}".format(name, orig_value))
 
-            ret.update({
-                'reqOtherHeaders': ", ".join(other),
-                'reqCookieLen': cookielen
+            # RESPONSE
+            response = entry['response']
+            status = response['status']
+            ret_request.update({
+                'status': status,
+                'respHttpVersion': response['httpVersion'],
+                'url': response.get('url'),
+                'respHeadersSize': response.get('headersSize') if 0 < response.get('headersSize', 0) else None,
+                'respBodySize': response.get('bodySize') if 0 < response.get('bodySize', 0) else None,
+                'respSize': response['content']['size']
             })
 
-            entries_transformed.append(ret)
+            # TODO revisit this logic - is this the right way to get extention, type, format from mimetype?
+            #  consider using mimetypes library instead https://docs.python.org/3/library/mimetypes.html
+            mime_type = response['content']['mimeType']
+            ext = utils.get_ext(url)
+            typ = utils.pretty_type(mime_type, ext)
+            frmt = utils.get_format(typ, mime_type, ext)
 
-    # 		// RESPONSE
-    # 		$response = $entry->{ 'response' };
-    # 		$status = $response->{ 'status' };
-    # 		array_push($aTuples, "status = $status");
-    # 		array_push($aTuples, "respHttpVersion = '" . $response->{ 'httpVersion' } . "'");
-    # 		if ( property_exists($response, 'url') && null !== $response->{'url'} ) {
-    # 			array_push($aTuples, "redirectUrl = '" . mysqli_real_escape_string($link, $response->{ 'url' }) . "'");
-    # 		}
-    # 		$respHeadersSize = $response->{ 'headersSize' };
-    # 		if ( $respHeadersSize && 0 < $respHeadersSize ) {
-    # 			array_push($aTuples, "respHeadersSize = $respHeadersSize");
-    # 		}
-    # 		$respBodySize = $response->{ 'bodySize' };
-    # 		if ( $respBodySize && 0 < $respBodySize ) {
-    # 			array_push($aTuples, "respBodySize = $respBodySize");
-    # 		}
-    # 		$content = $response->{ 'content' };
-    # 		array_push($aTuples, "respSize = " . $content->{ 'size' });
-    # 		$mimeType = mysqli_real_escape_string($link, $content->{ 'mimeType' });
-    # 		array_push($aTuples, "mimeType = '$mimeType'");
-    # 		$ext = mysqli_real_escape_string($link, getExt($url));
-    # 		array_push($aTuples, "ext = '$ext'");
-    # 		$type = prettyType($mimeType, $ext);
-    # 		array_push($aTuples, "type = '$type'");
-    # 		$format = getFormat($type, $mimeType, $ext);
-    # 		array_push($aTuples, "format = '$format'");
-    # 		$headers = $response->{ 'headers' };
-    # 		$other = "";
-    # 		$cookielen = 0;
-    # 		for ( $h = 0; $h < count($headers); $h++ ) {
-    # 			$header = $headers[$h];
-    # 			$name = $header->{ 'name' };
-    # 			$lcname = strtolower($name);
-    # 			$value = substr($header->{ 'value' }, 0, 255);
-    # 			$origValue = $header->{ 'value' };
-    # 			if ( array_key_exists($lcname, $ghRespHeaders) ) {
-    # 				// This is one of the standard headers we want to save.
-    # 				$column = $ghRespHeaders[$lcname];
-    # 				$hHeaders[$column] = ( array_key_exists($column, $hHeaders) ? $hHeaders[$column] . ", $value" : $value );
-    # 			}
-    # 			else if ( "set-cookie" == $lcname ) {
-    # 				// We don't save the Set-Cookie header, just the size.
-    # 				$cookielen += strlen($origValue);
-    # 			}
-    # 			else {
-    # 				// All other headers are lumped together.
-    # 				$other .= ( $other ? ", " : "" ) . "$name = $origValue";
-    # 			}
-    # 		}
-    # 		if ( $other ) {
-    # 			array_push($aTuples, "respOtherHeaders = '" . mysqli_real_escape_string($link, $other) . "'");
-    # 		}
-    # 		if ( $cookielen ) {
-    # 			array_push($aTuples, "respCookieLen = $cookielen");
-    # 		}
-    # 		// calculate expAge - number of seconds before resource expires
-    # 		// CVSNO - use the new computeRequestExpAge function.
-    # 		$expAge = 0;
-    # 		$cc = ( array_key_exists('resp_cache_control', $hHeaders) ? $hHeaders['resp_cache_control'] : null );
-    # 		if ( $cc &&
-    # 			 ( FALSE !== stripos($cc, "must-revalidate") || FALSE !== stripos($cc, "no-cache") || FALSE !== stripos($cc, "no-store") ) ) {
-    # 			// These directives dictate the response can NOT be cached.
-    # 			$expAge = 0;
-    # 		}
-    # 		else if ( $cc  && FALSE !== ($posMaxage = stripos($cc, "max-age=")) ) {
-    # 			$expAge = intval(substr($cc, $posMaxage+8));
-    # 		}
-    # 		else if ( array_key_exists('resp_expires', $hHeaders) ) {
-    # 			// According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
-    # 			//     freshness_lifetime = expires_value - date_value
-    # 			// If the Date: response header is present, we use that.
-    # 			// Otherwise we fall back to $startedDateTime which is based on the client so might suffer from clock skew.
-    # 			$startEpoch = ( array_key_exists('resp_date', $hHeaders) ? strtotime($hHeaders['resp_date']) : $startedDateTime );
-    # 			$expAge = strtotime($hHeaders['resp_expires']) - $startEpoch;
-    # 		}
-    # 		array_push($aTuples, "expAge = " . ( $expAge < 0 ? 0 : $expAge ));
-    #
+            ret_request.update({
+                'mimeType': mime_type,
+                'ext': ext,
+                'type': typ,
+                'format': frmt
+            })
+
+            response_headers, response_other_headers, response_cookie_size = utils.parse_header(
+                response['headers'], constants.ghRespHeaders, cookie_key='set-cookie', output_headers=request_headers)
+            ret_request.update({
+                # 'respOtherHeaders': response_headers,
+                'respCookieLen': response_cookie_size
+            })
+
+            # calculate expAge - number of seconds before resource expires
+            # CVSNO - use the new computeRequestExpAge function.
+            exp_age = 0
+            cc = request_headers.get('resp_cache_control')[0] if 'resp_cache_control' in request_headers else None
+            if cc and ('must-revalidate' in cc or 'no-cache' in cc or 'no-store' in cc):
+                # These directives dictate the response can NOT be cached.
+                exp_age = 0
+            elif cc and 'max-age=' in cc:
+                exp_age = int(re.findall(r"\d+", cc)[0])
+            elif 'resp_expires' in response_headers:  # TODO breaking when collection = ['0']
+                # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
+                #     freshness_lifetime = expires_value - date_value
+                # If the Date: response header is present, we use that.
+                # Otherwise we fall back to $startedDateTime which is based on the client so might suffer from clock skew.
+                start_date = response_headers.get('resp_date')[0] if 'resp_date' in response_headers else ret_request['startedDateTime']
+                end_date = response_headers['resp_expires'][0]
+                try:
+                    exp_age = (date_parser.parse(end_date) - date_parser.parse(start_date)).total_seconds()
+                except Exception:
+                    logging.exception("Could not parse dates start={}, end={}".format(start_date, end_date), exc_info=True)
+
+            ret_request.update({
+                'expAge': max(exp_age, 0)
+            })
+
     # 		// NOW add all the headers from both the request and response.
     # 		$aHeaders = array_keys($hHeaders);
     # 		for ( $h = 0; $h < count($aHeaders); $h++ ) {
@@ -253,7 +213,9 @@ class ImportHarJson(beam.DoFn):
     # 		doSimpleCommand($cmd);
     # 	}
     # }
-        return entries_transformed
+            requests.append(ret_request)
+
+        return requests
 
 
     # TODO finish porting logic

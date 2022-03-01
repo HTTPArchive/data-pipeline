@@ -1,38 +1,111 @@
-# mapping of headers to DB fields
-# IF YOU CHANGE THESE YOU HAVE TO REBUILD THE REQUESTS TABLE!!!!!!!!!!!!!!!!!!!!!!!!!!
-ghReqHeaders = {
-	'accept': "req_accept",
-	'accept-charset': "req_accept_charset",
-	'accept-encoding': "req_accept_encoding",
-	'accept-language': "req_accept_language",
-	'connection': "req_connection",
-	'host': "req_host",
-	'if-modified-since': "req_if_modified_since",
-	'if-none-match': "req_if_none_match",
-	'referer': "req_referer",
-	'user-agent': "req_user_agent"
-}
+import logging
 
-ghRespHeaders = {
-	'accept-ranges': "resp_accept_ranges",
-	'age': "resp_age",
-	'cache-control': "resp_cache_control",
-	'connection': "resp_connection",
-	'content-encoding': "resp_content_encoding",
-	'content-language': "resp_content_language",
-	'content-length': "resp_content_length",
-	'content-location': "resp_content_location",
-	'content-type': "resp_content_type",
-	'date': "resp_date",
-	'etag': "resp_etag",
-	'expires': "resp_expires",
-	'keep-alive': "resp_keep_alive",
-	'last-modified': "resp_last_modified",
-	'location': "resp_location",
-	'pragma': "resp_pragma",
-	'server': "resp_server",
-	'transfer-encoding': "resp_transfer_encoding",
-	'vary': "resp_vary",
-	'via': "resp_via",
-	'x-powered-by': "resp_x_powered_by"
-}
+
+# TODO generic - replace with proper exceptions
+def log_exeption_and_raise(msg, frm=None):
+    logging.exception(msg)
+    if frm:
+        raise RuntimeError(msg) from frm
+    else:
+        raise RuntimeError(msg)
+
+
+def get_ext(ext):
+    ret_ext = ext
+    i_q = ret_ext.find('?')
+    if i_q > -1:
+        ret_ext = ret_ext[:i_q]
+
+    ret_ext = ret_ext[ret_ext.rfind('/') + 1:]
+    i_dot = ret_ext.rfind('.')
+    if i_dot == -1:
+        ret_ext = ''
+    else:
+        ret_ext = ret_ext[i_dot + 1:]
+        if len(ret_ext) > 5:
+            # This technique can find VERY long strings that are not file extensions. Try to weed those out.
+            ret_ext = ''
+
+    return ret_ext
+
+
+def pretty_type(mime_typ, ext):
+    mime_typ = mime_typ.lower()
+
+    # Order by most unique first.
+    # Do NOT do html because "text/html" is often misused for other types. We catch it below.
+    for typ in ['font', 'css', 'image', 'script', 'video', 'audio', 'xml']:
+        if typ in mime_typ:
+            return typ
+
+    # Special cases I found by manually searching.
+    if 'json' in mime_typ or ext in ['js', 'json']:
+        return 'script'
+    elif ext in ['eot', 'ttf', 'woff', 'woff2', 'otf']:
+        return 'font'
+    elif ext in ['png', 'gif', 'jpg', 'jpeg', 'webp', 'ico', 'svg', 'avif', 'jxl', 'heic', 'heif']:
+        return 'image'
+    elif ext == 'css':
+        return 'css'
+    elif ext == 'xml':
+        return 'xml'
+    # Video extensions mp4, webm, ts, m4v, m4s, m4v, mov, ogv
+    elif next((typ for typ in ['flash', 'webm', 'mp4', 'flv'] if typ in mime_typ), None) \
+            or ext in ['mp4', 'webm', 'ts', 'm4v', 'm4s', 'mov', 'ogv', 'swf', 'f4v', 'flv']:
+        return 'video'
+    elif 'html' in mime_typ or ext in ['html', 'htm']:
+        # Here is where we catch "text/html" mime type.
+        return 'html'
+    elif 'text' in mime_typ:
+        # Put "text" LAST because it's often misused so $ext should take precedence.
+        return 'text'
+    else:
+        return 'other'
+
+
+def get_format(pretty_typ, mime_typ, ext):
+    if 'image' == pretty_typ:
+        # Order by most popular first.
+        for typ in ['jpg', 'png', 'gif', 'webp', 'svg', 'ico', 'avif', 'jxl', 'heic', 'heif']:
+            if typ in mime_typ or typ == ext:
+                return typ
+        if 'jpeg' in mime_typ:
+            return 'jpg'
+    elif 'video' == pretty_typ:
+        # Order by most popular first.
+        for typ in ['flash', 'swf', 'mp4', 'flv', 'f4v']:
+            if typ in mime_typ or typ == ext:
+                return typ
+    else:
+        return ''
+
+
+# Headers can appear multiple times, so we have to concat them all then add them to avoid setting a column twice.
+def parse_header(input_headers, standard_headers, cookie_key, output_headers=None):
+    if output_headers is None:
+        output_headers = {}
+    other = []
+    cookie_size = 0
+    for header in input_headers:
+        name = header['name']
+        lc_name = name.lower()
+        value = header['value'][:255]
+        orig_value = header['value']
+        if lc_name in standard_headers.keys():
+            # This is one of the standard headers we want to save
+            column = standard_headers[lc_name]
+            if output_headers.get(column):
+                output_headers[column].append(value)
+            else:
+                output_headers[column] = [value]
+        elif cookie_key == lc_name:
+            # We don't save the Cookie header, just the size.
+            cookie_size += len(orig_value)
+        else:
+            # All other headers are lumped together.
+            other.append("{} = {}".format(name, orig_value))
+
+    # output_headers = {k: ", ".join(v) for k, v in output_headers.items()}
+    ret_other = ", ".join(other)
+
+    return output_headers, ret_other, cookie_size
