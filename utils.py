@@ -1,3 +1,4 @@
+import hashlib
 import logging
 
 
@@ -8,6 +9,14 @@ def log_exeption_and_raise(msg, frm=None):
         raise RuntimeError(msg) from frm
     else:
         raise RuntimeError(msg)
+
+
+def remove_empty_keys(d):
+    return {k: v for k, v in d if v is not None}
+
+
+def get_url_hash(url):
+    return int(hashlib.md5(url.encode()).hexdigest()[0:4], 16)
 
 
 def get_ext(ext):

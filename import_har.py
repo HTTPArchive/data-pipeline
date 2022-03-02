@@ -64,7 +64,7 @@ def run(argv=None):
                   | 'Parse' >> beam.ParDo(transformation.ImportHarJson()).with_outputs('page', 'requests')
                   )
         pages, requests = parsed
-        requests = 'Flattenrequests' >> beam.FlatMap(lambda elements: elements)  # TODO reshuffle? need to monitor skew
+        requests = 'FlattenRequests' >> beam.FlatMap(lambda elements: elements)  # TODO reshuffle? need to monitor skew
 
         # pages | 'LogPages' >> beam.Map(transformation.TestLogging.log_and_apply)
         # requests | 'LogRequests' >> beam.Map(transformation.TestLogging.log_and_apply)

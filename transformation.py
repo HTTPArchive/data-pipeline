@@ -1,5 +1,4 @@
 import datetime
-import hashlib
 import json
 import logging
 import re
@@ -52,16 +51,16 @@ class ImportHarJson(beam.DoFn):
             utils.log_exeption_and_raise("No pages found")
 
         # STEP 1: Create a partial "page" record so we get a pageid.
-        page = ImportHarJson.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
-        # TODO revisit this ported logic
-        # if not page:
-        #     return None
+        page = utils.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
+        page_id = page['pageid']
+        if not page:
+            return None
 
         # STEP 2: Create all the resources & associate them with the pageid.
-        entries = ImportHarJson.import_entries(log['entries'], page['pageid'], status_info)
+        entries, first_url, first_html_url = ImportHarJson.import_entries(log['entries'], page_id, status_info)
         if not entries:
             # TODO raise exception or log error?
-            utils.log_exeption_and_raise("ImportEntries failed. Purging pageid $pageid")
+            utils.log_exeption_and_raise("ImportEntries failed for pageid:{}", page_id)
 
         # else:
         # TODO 	// STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
@@ -81,12 +80,14 @@ class ImportHarJson(beam.DoFn):
 
     # TODO finish porting logic
     @staticmethod
-    def import_entries(entries, pageid, status_info=None, first_url='', first_html_url=''):
+    def import_entries(entries, pageid, status_info=None):
         # TODO remove this default assignment, only used for prototyping
         if status_info is None:
             status_info = {}
 
         requests = []
+        first_url = ''
+        first_html_url = ''
 
         for entry in entries:
             ret_request = {
@@ -114,14 +115,13 @@ class ImportHarJson(beam.DoFn):
                 'reqCookieLen': request_cookie_size
             })
 
-
             # RESPONSE
             response = entry['response']
             status = response['status']
             ret_request.update({
                 'status': status,
                 'respHttpVersion': response['httpVersion'],
-                'url': response.get('url'),
+                'redirectUrl': response.get('url'),
                 'respHeadersSize': response.get('headersSize') if 0 < response.get('headersSize', 0) else None,
                 'respBodySize': response.get('bodySize') if 0 < response.get('bodySize', 0) else None,
                 'respSize': response['content']['size']
@@ -144,7 +144,7 @@ class ImportHarJson(beam.DoFn):
             response_headers, response_other_headers, response_cookie_size = utils.parse_header(
                 response['headers'], constants.ghRespHeaders, cookie_key='set-cookie', output_headers=request_headers)
             ret_request.update({
-                # 'respOtherHeaders': response_headers,
+                'respOtherHeaders': response_headers,
                 'respCookieLen': response_cookie_size
             })
 
@@ -157,23 +157,26 @@ class ImportHarJson(beam.DoFn):
                 exp_age = 0
             elif cc and 'max-age=' in cc:
                 exp_age = int(re.findall(r"\d+", cc)[0])
-            elif 'resp_expires' in response_headers:  # TODO breaking when collection = ['0']
+            elif 'resp_expires' in response_headers:
                 # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
                 #     freshness_lifetime = expires_value - date_value
                 # If the Date: response header is present, we use that.
                 # Otherwise we fall back to $startedDateTime which is based on the client so might suffer from clock skew.
-                start_date = response_headers.get('resp_date')[0] if 'resp_date' in response_headers else ret_request['startedDateTime']
+                start_date = response_headers.get('resp_date')[0] \
+                    if 'resp_date' in response_headers \
+                    else ret_request['startedDateTime']
                 end_date = response_headers['resp_expires'][0]
                 try:
                     exp_age = (date_parser.parse(end_date) - date_parser.parse(start_date)).total_seconds()
                 except Exception:
-                    logging.exception("Could not parse dates start={}, end={}".format(start_date, end_date), exc_info=True)
+                    logging.exception("Could not parse dates start={}, end={}", start_date, end_date, exc_info=True)
 
             ret_request.update({
                 'expAge': max(exp_age, 0)
             })
 
     # 		// NOW add all the headers from both the request and response.
+            ret_request.update({k: ", ".join(v) for k, v in request_headers.items()})
     # 		$aHeaders = array_keys($hHeaders);
     # 		for ( $h = 0; $h < count($aHeaders); $h++ ) {
     # 			$header = $aHeaders[$h];
@@ -189,52 +192,50 @@ class ImportHarJson(beam.DoFn):
     # 			}
     # 		}
     #
-    # 		// wrap it up
-    # 		$bFirstReq = 0;
-    # 		$bFirstHtml = 0;
-    # 		if ( ! $firstUrl ) {
-    # 			if ( (400 <= $status && 599 >= $status) || (12000 <= $status) ) {
-    # 				dprint("ERROR($gPagesTable pageid: $pageid): The first request ($url) failed with status $status.");
-    # 				return false;
-    # 			}
-    # 			// This is the first URL found associated with the page - assume it's the base URL.
-    # 			$bFirstReq = 1;
-    # 			$firstUrl = $url;
-    # 		}
-    # 		if ( ! $firstHtmlUrl && 200 == $status && $type == 'html' ) {
-    # 			// This is the first URL found associated with the page that's HTML.
-    # 			$bFirstHtml = 1;
-    # 			$firstHtmlUrl = $url;
-    # 		}
-    # 		array_push($aTuples, "firstReq = $bFirstReq");
-    # 		array_push($aTuples, "firstHtml = $bFirstHtml");
-    #
-    # 		$cmd = "REPLACE INTO $gRequestsTable SET " . implode(", ", $aTuples) . ";";
-    # 		doSimpleCommand($cmd);
-    # 	}
-    # }
+            # TODO consider doing this sooner? why process if status is bad?
+            # wrap it up
+            first_req = False
+            first_html = False
+            if not first_url:
+                if (400 <= status <= 599) or 12000 <= status:
+                    logging.error("ERROR($gPagesTable pageid: {}): The first request ({}}) failed with status {}}.",
+                                  pageid, url, status)
+                    return None
+                # This is the first URL found associated with the page - assume it's the base URL.
+                first_req = True
+                first_url = url
+
+            if not first_html_url:
+                # This is the first URL found associated with the page that's HTML.
+                first_html = True
+                first_html_url = url
+
+            ret_request.update({
+                'firstReq': first_req,
+                'firstHtml': first_html
+            })
+
             requests.append(ret_request)
 
-        return requests
+        return requests, first_url, first_html_url
 
-
-    # TODO finish porting logic
     @staticmethod
     def import_page(page, status_info):
-        if not (status_info['label'] or status_info['archive']):
+        if not (status_info.get('label') and status_info.get('archive')):
             logging.exception("'label' or 'crawlid' was null in import_page")
             return None
 
         return {
-            'pageid': uuid.uuid4().int,  # TODO placeholder
+            'pageid': uuid.uuid4().int,  # TODO placeholder or fine as a replacement for SQL ID?
             'createDate': int(datetime.datetime.now().timestamp()),
             'startedDateTime': page['startedDateTime'],
             'archive': status_info['archive'],
             'label': status_info['label'],
             'crawlid': status_info['crawlid'],
-            'url': status_info['url'],
-            'urlhash': ImportHarJson.get_url_hash(status_info['url']),
-            'urlshort': status_info['url'][0:255],
+            # TODO confirm - it's ok to get url from page info rather than status info as originally implemented?
+            'url': page['_URL'],
+            'urlhash': utils.get_url_hash(page['_URL']),
+            'urlshort': page['_URL'][:255],
             '_TTFB': page.get('_TTFB'),
             'renderStart': page.get('_render'),
             'fullyLoaded': page.get('_fullyLoaded'),
@@ -264,17 +265,9 @@ class ImportHarJson(beam.DoFn):
         }
 
     @staticmethod
-    def get_url_hash(url):
-        return int(hashlib.md5(url.encode()).hexdigest()[0:4], 16)
-
-    @staticmethod
     # note: check values instead of keys (i.e. original implementation)
     def get_if_keys_exist(dictionary, check_keys, return_key):
         if all(value in dictionary for value in dictionary[check_keys]):
             return dictionary.get(return_key)
         else:
             return None
-
-    @staticmethod
-    def remove_empty_keys(d):
-        return {k: v for k, v in d if v is not None}

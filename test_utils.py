@@ -4,6 +4,9 @@ import utils
 
 
 class Test(TestCase):
+    def test_get_url_hash(self):
+        self.assertEqual(utils.get_url_hash("https://google.com/"), 63524)
+
     def test_get_ext_question(self):
         self.assertEqual(utils.get_ext('http://test.com/foo.bar?baz'), 'bar')
 

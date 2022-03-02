@@ -4,9 +4,6 @@ from transformation import ImportHarJson
 
 
 class TestImportHarJson(TestCase):
-    def test_get_url_hash(self):
-        self.assertEqual(ImportHarJson.get_url_hash("https://google.com/"), 63524)
-
     def test_generate_pages_none_error(self):
         with self.assertRaises(RuntimeError):
             ImportHarJson.generate_pages(None)
@@ -19,3 +16,5 @@ class TestImportHarJson(TestCase):
         with self.assertRaises(RuntimeError):
             ImportHarJson.generate_pages('{"log": {"pages": []}}')
 
+    def test_import_page_empty_status_info(self):
+        self.assertIsNone(ImportHarJson.import_page(None, {}))
