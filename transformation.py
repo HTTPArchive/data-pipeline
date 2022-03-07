@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 import re
 import uuid
 
@@ -11,30 +12,22 @@ import constants
 import utils
 
 
-class TestLogging(beam.DoFn):
-    def process(self, element, *args, **kwargs):
-        self.log_and_apply(element)
-
-    @staticmethod
-    def log_and_apply(f, log=logging.info):
-        log(f)
-        return f
-
-
 class ImportHarJson(beam.DoFn):
     def process(self, element):
-        page, requests = self.generate_pages(element)
+        file_name, data = element
+        page, requests = self.generate_pages(file_name, data)
         yield beam.pvalue.TaggedOutput('page', page)
         yield beam.pvalue.TaggedOutput('requests', requests)
 
     @staticmethod
-    def generate_pages(element):
-        # TODO: status table,info,id?
+    def generate_pages(file_name, element):
+        base_name = os.path.basename(file_name)
         status_info = {
-            'archive': 'TODO',
-            'label': 'TODO',
-            'crawlid': 'TODO',
-            'url': 'https://google.com'
+            'archive': 'All',  # only one value found when porting logic from PHP
+            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=datetime.datetime.strptime(base_name[:6], '%y%m%d')),
+            'crawlid': 'TODO',  # TODO necessary with new pipeline?
+            'wptid': base_name.split('.')[0],
+            'medianRun': 1  # TODO only one value found when porting logic from PHP
         }
 
         if not element:
@@ -52,39 +45,30 @@ class ImportHarJson(beam.DoFn):
 
         # STEP 1: Create a partial "page" record so we get a pageid.
         page = utils.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
-        page_id = page['pageid']
         if not page:
-            return None
+            return
+        page_id = page['pageid']
 
         # STEP 2: Create all the resources & associate them with the pageid.
         entries, first_url, first_html_url = ImportHarJson.import_entries(log['entries'], page_id, status_info)
         if not entries:
-            # TODO raise exception or log error?
             utils.log_exeption_and_raise("ImportEntries failed for pageid:{}", page_id)
-
-        # else:
-        # TODO 	// STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
-        # 	$bAgg = aggregateStats($pageid, $firstUrl, $firstHtmlUrl, $statusInfo);
-        # 	t_aggregate('AggregateStats');
-        # 	if ( false === $bAgg ) {
-        # 		dprint("ERROR($gStatusTable statusid: $statusInfo[statusid]): AggregateStats failed. Purging pageid $pageid");
-        # 		purgePage($pageid);
-        # 	}
-        # 	else {
-        # 		return true;
-        # 	}
-        # }
-        #
+            return
+        else:
+            # STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
+            agg_stats = ImportHarJson.aggregate_stats(entries, page_id, first_url, first_html_url, status_info)
+            if not agg_stats:
+                logging.error("ERROR($gStatusTable statusid: {}): AggregateStats failed. Purging pageid {}",
+                              status_info['statusid'], page_id)
+                return
+            else:
+                page.update(agg_stats)
 
         return page, entries
 
     # TODO finish porting logic
     @staticmethod
-    def import_entries(entries, pageid, status_info=None):
-        # TODO remove this default assignment, only used for prototyping
-        if status_info is None:
-            status_info = {}
-
+    def import_entries(entries, pageid, status_info):
         requests = []
         first_url = ''
         first_html_url = ''
@@ -109,8 +93,8 @@ class ImportHarJson(beam.DoFn):
                 'httpVersion': request['httpVersion'],
                 'url': url,
                 'urlShort': url[:255],
-                'reqHeadersSize': request.get('headersSize') if 0 < request.get('headersSize') else None,
-                'reqBodySize': request.get('bodySize') if 0 < request.get('bodySize') else None,
+                'reqHeadersSize': request.get('headersSize') if int(request.get('headersSize', 0)) > 0 else None,
+                'reqBodySize': request.get('bodySize') if int(request.get('bodySize', 0)) > 0 else None,
                 'reqOtherHeaders': request_other_headers,
                 'reqCookieLen': request_cookie_size
             })
@@ -122,8 +106,8 @@ class ImportHarJson(beam.DoFn):
                 'status': status,
                 'respHttpVersion': response['httpVersion'],
                 'redirectUrl': response.get('url'),
-                'respHeadersSize': response.get('headersSize') if 0 < response.get('headersSize', 0) else None,
-                'respBodySize': response.get('bodySize') if 0 < response.get('bodySize', 0) else None,
+                'respHeadersSize': response.get('headersSize') if int(response.get('headersSize', 0)) > 0 else None,
+                'respBodySize': response.get('bodySize') if int(response.get('bodySize', 0)) > 0 else None,
                 'respSize': response['content']['size']
             })
 
@@ -135,16 +119,16 @@ class ImportHarJson(beam.DoFn):
             frmt = utils.get_format(typ, mime_type, ext)
 
             ret_request.update({
-                'mimeType': mime_type,
-                'ext': ext,
-                'type': typ,
-                'format': frmt
+                'mimeType': mime_type.lower(),
+                'ext': ext.lower(),
+                'type': typ.lower(),
+                'format': frmt.lower()
             })
 
             response_headers, response_other_headers, response_cookie_size = utils.parse_header(
                 response['headers'], constants.ghRespHeaders, cookie_key='set-cookie', output_headers=request_headers)
             ret_request.update({
-                'respOtherHeaders': response_headers,
+                'respOtherHeaders': response_other_headers,
                 'respCookieLen': response_cookie_size
             })
 
@@ -175,23 +159,9 @@ class ImportHarJson(beam.DoFn):
                 'expAge': max(exp_age, 0)
             })
 
-    # 		// NOW add all the headers from both the request and response.
+            # NOW add all the headers from both the request and response.
             ret_request.update({k: ", ".join(v) for k, v in request_headers.items()})
-    # 		$aHeaders = array_keys($hHeaders);
-    # 		for ( $h = 0; $h < count($aHeaders); $h++ ) {
-    # 			$header = $aHeaders[$h];
-    # 			array_push($aTuples, "$header = '" . mysqli_real_escape_string($link, $hHeaders[$header]) . "'");
-    # 		}
-    #
-    # 		// CUSTOM RULES
-    # 		if ( array_key_exists('_custom_rules', $entry) ) {
-    # 			$customrules = $entry->{'_custom_rules'};
-    # 			if ( array_key_exists('ModPageSpeed', $customrules) ) {
-    # 				$count = $customrules->{'ModPageSpeed'}->{'count'};
-    # 				// TODO array_push($aTuples, "reqBodySize = $count");
-    # 			}
-    # 		}
-    #
+
             # TODO consider doing this sooner? why process if status is bad?
             # wrap it up
             first_req = False
@@ -235,8 +205,8 @@ class ImportHarJson(beam.DoFn):
             # TODO confirm - it's ok to get url from page info rather than status info as originally implemented?
             'url': page['_URL'],
             'urlhash': utils.get_url_hash(page['_URL']),
-            'urlshort': page['_URL'][:255],
-            '_TTFB': page.get('_TTFB'),
+            'urlShort': page['_URL'][:255],
+            'TTFB': page.get('_TTFB'),
             'renderStart': page.get('_render'),
             'fullyLoaded': page.get('_fullyLoaded'),
             'visualComplete': page.get('_visualComplete'),
@@ -252,10 +222,11 @@ class ImportHarJson(beam.DoFn):
             '_adult_site': page.get('_adult_site'),
             'avg_dom_depth': page.get('_avg_dom_depth'),
             'doctype': page.get('_doctype'),
-            'document_height': page.get('_document_height') if 0 < int(page.get('_document_height', 0)) else None,
-            'document_width': page.get('_document_width') if 0 < int(page.get('_document_width', 0)) else None,
-            'localstorage_size': page.get('_localstorage_size') if 0 < int(page.get('_localstorage_size', 0)) else None,
-            'sessionstorage_size': page.get('_sessionstorage_size') if 0 < int(page.get('_sessionstorage_size', 0)) else None,
+            'document_height': page.get('_document_height') if int(page.get('_document_height', 0)) > 0 else None,
+            'document_width': page.get('_document_width') if int(page.get('_document_width', 0)) > 0 else None,
+            'localstorage_size': page.get('_localstorage_size') if int(page.get('_localstorage_size', 0)) > 0 else None,
+            'sessionstorage_size': page.get('_sessionstorage_size') if int(
+                page.get('_sessionstorage_size', 0)) > 0 else None,
             'meta_viewport': page.get('_meta_viewport'),
             'num_iframes': page.get('_num_iframes'),
             'num_scripts': page.get('_num_scripts'),
@@ -265,9 +236,118 @@ class ImportHarJson(beam.DoFn):
         }
 
     @staticmethod
-    # note: check values instead of keys (i.e. original implementation)
-    def get_if_keys_exist(dictionary, check_keys, return_key):
-        if all(value in dictionary for value in dictionary[check_keys]):
-            return dictionary.get(return_key)
-        else:
-            return None
+    def aggregate_stats(entries, page_id, first_url, first_html_url, status_info):
+        # CVSNO - move this error checking to the point before this function is called
+        if not first_url:
+            logging.error("ERROR($gPagesTable pageid: {}}): no first URL found.", page_id)
+            return
+        if not first_html_url:
+            logging.error("ERROR($gPagesTable pageid: {}): no first HTML URL found.", page_id)
+            return
+
+        # initialize variables for counting the page's stats
+        bytes_total = 0
+        req_total = 0
+        size = {}
+        count = {}
+
+        # This is a list of all mime types AND file formats that we care about.
+        typs = ["css", "image", "script", "html", "font", "other", "audio", "video", "text", "xml", "gif", "jpg", "png",
+                "webp", "svg", "ico", "flash", "swf", "mp4", "flv", "f4v"]
+        # initialize the hashes
+        for typ in typs:
+            size[typ] = 0
+            count[typ] = 0
+        domains = {}
+        maxage_null = max_age_0 = max_age_1 = max_age_30 = max_age_365 = max_age_more = 0
+        bytes_html_doc = num_redirects = num_errors = num_glibs = num_https = num_compressed = max_domain_reqs = 0
+
+        for entry in entries:
+            url = entry['urlShort']
+            pretty_type = entry['type']
+            resp_size = int(entry['respSize'])
+            req_total += 1
+            bytes_total += resp_size
+            count[pretty_type] += 1
+            size[pretty_type] += resp_size
+
+            frmt = entry.get('format')
+            if frmt and pretty_type in ['image', 'video']:
+                count[frmt] += 1
+                size[frmt] += resp_size
+
+            # count unique domains (really hostnames)
+            matches = re.findall(r'http[s]*:\/\/([^\/]*)', url)
+            if url and matches:
+                hostname = matches[0]
+                if hostname not in domains:
+                    domains[hostname] = 0
+                else:
+                    domains[hostname] += 0
+            else:
+                logging.error("ERROR($gPagesTable pageid: {}): No hostname found in URL: {}", page_id, url)
+
+            # count expiration windows
+            exp_age = entry.get('expAge')
+            day_secs = 24 * 60 * 60
+            if not exp_age:
+                maxage_null += 1
+            elif int(exp_age) == 0:
+                max_age_0 += 1
+            elif exp_age <= day_secs:
+                max_age_1 += 1
+            elif exp_age <= 30 * day_secs:
+                max_age_30 += 1
+            elif exp_age <= 365 * day_secs:
+                max_age_365 += 1
+            else:
+                max_age_more += 1
+
+            bytes_html_doc = resp_size if entry.get('firstHtml') else ''  # CVSNO - can we get this UNgzipped?!
+
+            status = entry.get('status')
+            if 300 <= status < 400 and status != 304:
+                num_redirects += 1
+            elif 400 <= status < 600:
+                num_errors += 1
+
+            if url.startswith('https://'):
+                num_https += 1
+
+            if 'googleapis.com' in entry.get('req_host', ''):
+                num_glibs += 1
+
+            if entry.get('resp_content_encoding', '') == 'gzip' or entry.get('resp_content_encoding', '') == 'deflate':
+                num_compressed += 1
+
+        for domain in domains:
+            max_domain_reqs = max(max_domain_reqs, domains[domain])
+
+        ret = {'reqTotal': req_total, 'bytesTotal': bytes_total}
+        for typ in typs:
+            ret.update({
+                'req{}'.format(typ.title()): count[typ],
+                'bytes{}'.format(typ.title()): size[typ]
+            })
+
+        ret.update({
+            'numDomains': len(domains),
+            'maxageNull': maxage_null,
+            'maxage0': max_age_0,
+            'maxage1': max_age_1,
+            'maxage30': max_age_30,
+            'maxage365': max_age_365,
+            'maxageMore': max_age_more,
+            'bytesHtmlDoc': bytes_html_doc,
+            'numRedirects': num_redirects,
+            'numErrors': num_errors,
+            'numGlibs': num_glibs,
+            'numHttps': num_https,
+            'numCompressed': num_compressed,
+            'maxDomainReqs': max_domain_reqs,
+            'wptid': status_info['wptid'],
+            'wptrun': status_info['medianRun'],
+            'rank': status_info.get('rank', '')
+        })
+
+        return ret

@@ -1,9 +1,8 @@
 import argparse
 import logging
-import posixpath
 
 import apache_beam as beam
-from apache_beam.io import ReadFromText, WriteToText, WriteToBigQuery, BigQueryDisposition
+from apache_beam.io import WriteToBigQuery, BigQueryDisposition, ReadFromTextWithFilename
 from apache_beam.io.gcp import bigquery
 from apache_beam.io.gcp.bigquery_tools import FileFormat
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -57,17 +56,15 @@ def run(argv=None):
 
     with beam.Pipeline(options=pipeline_options) as p:
         parsed = (p
-                  | 'Read' >> ReadFromText(known_args.input)
+                  | 'Read' >> ReadFromTextWithFilename(known_args.input)
                   # reshuffle to unlink dependent parallelism
                   # https://beam.apache.org/documentation/runtime/model/#parallelism
                   | 'Reshuffle' >> beam.Reshuffle()
                   | 'Parse' >> beam.ParDo(transformation.ImportHarJson()).with_outputs('page', 'requests')
                   )
         pages, requests = parsed
-        requests = 'FlattenRequests' >> beam.FlatMap(lambda elements: elements)  # TODO reshuffle? need to monitor skew
-
-        # pages | 'LogPages' >> beam.Map(transformation.TestLogging.log_and_apply)
-        # requests | 'LogRequests' >> beam.Map(transformation.TestLogging.log_and_apply)
+        # TODO reshuffle? need to monitor skew
+        requests = requests | 'FlattenRequests' >> beam.FlatMap(lambda elements: elements)
 
         # TODO consider removing this step
         #  only used for temporary history/troubleshooting, not necessary when using WriteToBigQuery.Method.FILE_LOADS
@@ -78,14 +75,14 @@ def run(argv=None):
         #     file_path_prefix=posixpath.join(known_args.output, 'request'),
         #     file_name_suffix='.jsonl')
 
-        _ = pages | 'WriteToBigQuery' >> WriteToBigQuery(
+        _ = pages | 'WritePagesToBigQuery' >> WriteToBigQuery(
             table=known_args.pages_table,
             schema=bigquery.SCHEMA_AUTODETECT,
             create_disposition=BigQueryDisposition.CREATE_IF_NEEDED,
             write_disposition=BigQueryDisposition.WRITE_TRUNCATE,
             method=WriteToBigQuery.Method.FILE_LOADS,
             temp_file_format=FileFormat.JSON)
-        _ = requests | 'WriteToBigQuery' >> WriteToBigQuery(
+        _ = requests | 'WriteRequestsToBigQuery' >> WriteToBigQuery(
             table=known_args.requests_table,
             schema=bigquery.SCHEMA_AUTODETECT,
             create_disposition=BigQueryDisposition.CREATE_IF_NEEDED,
