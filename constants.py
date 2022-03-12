@@ -4,6 +4,9 @@ big_query_tables = {
     'requests': 'httparchive:experimental.requests'
 }
 
+topic = 'har-gcs'
+subscription = 'projects/httparchive/subscriptions/har-gcs-pipeline'
+
 # mapping of headers to DB fields
 # IF YOU CHANGE THESE YOU HAVE TO REBUILD THE REQUESTS TABLE!!!!!!!!!!!!!!!!!!!!!!!!!!
 ghReqHeaders = {

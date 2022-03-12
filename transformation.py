@@ -3,17 +3,46 @@ import json
 import logging
 import os
 import re
-import uuid
 
 import apache_beam as beam
+from apache_beam.io import ReadFromPubSub
+from apache_beam.transforms.combiners import Sample
 from dateutil import parser as date_parser
 
 import constants
 import utils
 
 
+# helper for testing
+class SampleFiles(beam.PTransform):
+    def expand(self, input_or_inputs):
+        return input_or_inputs | Sample.FixedSizeGlobally(3) | beam.FlatMap(lambda e: e)
+
+
+class ReadFiles(beam.PTransform):
+    def __init__(self, streaming, subscription, _input):
+        super().__init__()
+        self.streaming = streaming
+        self.subscription = subscription
+        self.input = _input
+
+    def expand(self, p):
+        # streaming pipeline
+        if self.streaming:
+            files = (p
+                     | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
+                     | 'GetFileName' >> beam.Map(
+                        lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}")
+                     | 'ReadFile' >> beam.io.ReadAllFromText(with_filename=True))
+        # batch pipeline
+        else:
+            files = p | 'ReadFile' >> beam.io.ReadFromTextWithFilename(self.input)
+
+        return files
+
+
 class ImportHarJson(beam.DoFn):
-    def process(self, element):
+    def process(self, element, **kwargs):
         file_name, data = element
         page, requests = self.generate_pages(file_name, data)
         yield beam.pvalue.TaggedOutput('page', page)
@@ -27,7 +56,8 @@ class ImportHarJson(beam.DoFn):
             'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=datetime.datetime.strptime(base_name[:6], '%y%m%d')),
             'crawlid': 'TODO',  # TODO necessary with new pipeline?
             'wptid': base_name.split('.')[0],
-            'medianRun': 1  # TODO only one value found when porting logic from PHP
+            'medianRun': 1,  # TODO only one value found when porting logic from PHP
+            'pageid': hash(base_name),  # hash file name for consistent id
         }
 
         if not element:
@@ -196,7 +226,7 @@ class ImportHarJson(beam.DoFn):
             return None
 
         return {
-            'pageid': uuid.uuid4().int,  # TODO placeholder or fine as a replacement for SQL ID?
+            'pageid': status_info['pageid'],
             'createDate': int(datetime.datetime.now().timestamp()),
             'startedDateTime': page['startedDateTime'],
             'archive': status_info['archive'],
@@ -277,7 +307,7 @@ class ImportHarJson(beam.DoFn):
                 size[frmt] += resp_size
 
             # count unique domains (really hostnames)
-            matches = re.findall(r'http[s]*:\/\/([^\/]*)', url)
+            matches = re.findall(r'http[s]*://([^/]*)', url)
             if url and matches:
                 hostname = matches[0]
                 if hostname not in domains:
