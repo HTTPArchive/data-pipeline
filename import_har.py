@@ -8,9 +8,8 @@ from apache_beam.io.gcp import bigquery
 from apache_beam.io.gcp.bigquery_tools import FileFormat
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 
-import constants
-import transformation
-import utils
+from modules import constants, utils
+from modules.transformation import ImportHarJson, ReadFiles
 
 
 def parse_args(argv):
@@ -18,7 +17,7 @@ def parse_args(argv):
     parser.add_argument(
         '--input',
         dest='input',
-        default='gs://httparchive/experimental/input/*',
+        # default='gs://httparchive/experimental/input/*',
         help='Input file to process.')
     parser.add_argument(
         '--output',
@@ -53,8 +52,8 @@ def run(argv=None):
         pipeline_args,
         # TODO testing, move all hardcoded values below into run script
         project='httparchive',
-        staging_location='gs://httparchive/experimental/staging',
-        temp_location='gs://httparchive/experimental/temp',
+        # staging_location='gs://httparchive/experimental/staging',
+        # temp_location='gs://httparchive/experimental/temp',
         # streaming=True,
     )
     standard_options = pipeline_options.view_as(StandardOptions)
@@ -68,10 +67,10 @@ def run(argv=None):
 
     with beam.Pipeline(options=pipeline_options) as p:
         parsed = (p
-                  | transformation.ReadFiles(standard_options.streaming, known_args.subscription, known_args.input)
-                  # | transformation.SampleFiles()  # TODO only for testing, remove in production
+                  | ReadFiles(standard_options.streaming, known_args.subscription, known_args.input)
+                  # | transformation.SampleFiles(sample_size=3)  # TODO only for testing, remove in prod
                   | beam.Reshuffle()  # reshuffle to unlink dependent parallelism
-                  | 'ParseHar' >> beam.ParDo(transformation.ImportHarJson()).with_outputs('page', 'requests')
+                  | 'ParseHar' >> beam.ParDo(ImportHarJson()).with_outputs('page', 'requests')
                   )
         pages, requests = parsed
         # TODO reshuffle? need to monitor skew
@@ -97,7 +96,7 @@ def run(argv=None):
                 'method': WriteToBigQuery.Method.STREAMING_INSERTS,
                 # 'create_disposition': BigQueryDisposition.CREATE_IF_NEEDED,
                 'write_disposition': BigQueryDisposition.WRITE_APPEND,
-                'triggering_frequency': 60,
+                'triggering_frequency': 10,
                 'with_auto_sharding': True,  # TODO fixed sharding instead?
 
                 # TODO monitor streaming performance and consider switching to using FILE_LOADS

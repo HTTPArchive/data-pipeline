@@ -9,14 +9,24 @@ from apache_beam.io import ReadFromPubSub
 from apache_beam.transforms.combiners import Sample
 from dateutil import parser as date_parser
 
-import constants
-import utils
+from modules import constants, utils
 
 
 # helper for testing
 class SampleFiles(beam.PTransform):
+    def __init__(self, sample_size, timeout=1*60):
+        super().__init__()
+        self.sample_size = sample_size
+        self.timeout = timeout
+
     def expand(self, input_or_inputs):
-        return input_or_inputs | Sample.FixedSizeGlobally(3) | beam.FlatMap(lambda e: e)
+        return (input_or_inputs
+                # | WindowInto(
+                #     FixedWindows(self.timeout),
+                #     trigger=Repeatedly(AfterAny(AfterCount(self.sample_size), AfterProcessingTime(self.timeout))),
+                #     accumulation_mode=AccumulationMode.DISCARDING)
+                | Sample.FixedSizeGlobally(self.sample_size)
+                | beam.FlatMap(lambda e: e))
 
 
 class ReadFiles(beam.PTransform):
@@ -186,7 +196,7 @@ class ImportHarJson(beam.DoFn):
                     logging.exception("Could not parse dates start={}, end={}", start_date, end_date, exc_info=True)
 
             ret_request.update({
-                'expAge': max(exp_age, 0)
+                'expAge': int(max(exp_age, 0))
             })
 
             # NOW add all the headers from both the request and response.

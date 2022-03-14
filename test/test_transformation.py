@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from transformation import ImportHarJson
+from modules.transformation import ImportHarJson
 
 
 class TestImportHarJson(TestCase):
