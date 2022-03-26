@@ -60,14 +60,18 @@ class ImportHarJson(beam.DoFn):
 
     @staticmethod
     def generate_pages(file_name, element):
-        base_name = os.path.basename(file_name)
+        dir_name, base_name = os.path.split(file_name)
+        file_date = datetime.datetime.strptime(base_name[:6], '%y%m%d')
         status_info = {
             'archive': 'All',  # only one value found when porting logic from PHP
-            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=datetime.datetime.strptime(base_name[:6], '%y%m%d')),
+            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=file_date),
             'crawlid': 'TODO',  # TODO necessary with new pipeline?
-            'wptid': base_name.split('.')[0],
-            'medianRun': 1,  # TODO only one value found when porting logic from PHP
+            'wptid': base_name.split('.')[0],  # TODO from rick use data.id instead of filename
+            'medianRun': 1,  # TODO from rick - median.firstview.run
             'pageid': hash(base_name),  # hash file name for consistent id
+            'rank': '',  # TODO where to source this from?
+            'table_prefix': '{:%Y_%m_%d}'.format(file_date),
+            'client': utils.client_name(dir_name.split('/')[-1].split('-')[0]),
         }
 
         if not element:
@@ -115,6 +119,7 @@ class ImportHarJson(beam.DoFn):
 
         for entry in entries:
             ret_request = {
+                'client': status_info['client'],
                 'pageid': pageid,
                 'crawlid': status_info['crawlid'],
                 'startedDateTime': entry['startedDateTime'],  # we use this below for expAge calculation
@@ -236,6 +241,7 @@ class ImportHarJson(beam.DoFn):
             return None
 
         return {
+            'client': status_info['client'],
             'pageid': status_info['pageid'],
             'createDate': int(datetime.datetime.now().timestamp()),
             'startedDateTime': page['startedDateTime'],

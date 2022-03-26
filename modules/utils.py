@@ -118,3 +118,10 @@ def parse_header(input_headers, standard_headers, cookie_key, output_headers=Non
     ret_other = ", ".join(other)
 
     return output_headers, ret_other, cookie_size
+
+
+def client_name(client):
+    if client == 'chrome':
+        return 'desktop'
+    elif client == 'android':
+        return 'mobile'
