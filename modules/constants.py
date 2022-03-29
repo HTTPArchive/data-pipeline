@@ -1,7 +1,16 @@
+import importlib.resources as pkg_resources
+import json
+
 # TODO remove 'experimental' before going live
-big_query_tables = {
-    'pages': 'httparchive:experimental.pages',
-    'requests': 'httparchive:experimental.requests'
+big_query = {
+    'datasets': {
+        'pages': 'httparchive:experimental_summary_pages',
+        'requests': 'httparchive:experimental_summary_requests',
+    },
+    'schemas': {
+        'pages': {'fields': json.loads(pkg_resources.read_text('schema', 'summary_pages.json'))},
+        'requests': {'fields': json.loads(pkg_resources.read_text('schema', 'summary_requests.json'))},
+    },
 }
 
 topic = 'har-gcs'

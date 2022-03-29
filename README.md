@@ -39,11 +39,12 @@ gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ## batch
 ```commandline
 python import_har.py \
---input=gs://httparchive/experimental/input/* \
+--input=gs://httparchive/experimental/input/** \
 --temp_location=gs://httparchive/experimental/temp \
 --staging_location=gs://httparchive/experimental/staging \
 --setup_file="D:\development\projects\HTTPArchive\data-pipeline\setup.py" \
 --runner=DataflowRunner \
+--save_main_session \
 --project=httparchive \
 --region=us-west1 \
 --machine_type=n1-standard-32 \
@@ -60,6 +61,7 @@ python import_har.py \
 --staging_location=gs://httparchive/experimental/staging \
 --setup_file="D:\development\projects\HTTPArchive\data-pipeline\setup.py" \
 --runner=DataflowRunner \
+--save_main_session \
 --project=httparchive \
 --region=us-west1 \
 --machine_type=n1-standard-32 \

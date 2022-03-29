@@ -65,12 +65,12 @@ class ImportHarJson(beam.DoFn):
         status_info = {
             'archive': 'All',  # only one value found when porting logic from PHP
             'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=file_date),
-            'crawlid': 'TODO',  # TODO necessary with new pipeline?
+            'crawlid': 0,  # TODO necessary with new pipeline?
             'wptid': base_name.split('.')[0],  # TODO from rick use data.id instead of filename
             'medianRun': 1,  # TODO from rick - median.firstview.run
             'pageid': hash(base_name),  # hash file name for consistent id
             'rank': '',  # TODO where to source this from?
-            'table_prefix': '{:%Y_%m_%d}'.format(file_date),
+            'date': '{:%Y_%m_%d}'.format(file_date),
             'client': utils.client_name(dir_name.split('/')[-1].split('-')[0]),
         }
 
@@ -120,9 +120,10 @@ class ImportHarJson(beam.DoFn):
         for entry in entries:
             ret_request = {
                 'client': status_info['client'],
+                'date': status_info['date'],
                 'pageid': pageid,
                 'crawlid': status_info['crawlid'],
-                'startedDateTime': entry['startedDateTime'],  # we use this below for expAge calculation
+                'startedDateTime': utils.datetime_to_epoch(entry['startedDateTime']),  # we use this below for expAge calculation
                 'time': entry['time'],
                 '_cdn_provider': entry.get('_cdn_provider'),
                 '_gzip_save': entry.get('_gzip_save')  # amount response WOULD have been reduced if it had been gzipped
@@ -242,9 +243,10 @@ class ImportHarJson(beam.DoFn):
 
         return {
             'client': status_info['client'],
+            'date': status_info['date'],
             'pageid': status_info['pageid'],
             'createDate': int(datetime.datetime.now().timestamp()),
-            'startedDateTime': page['startedDateTime'],
+            'startedDateTime': utils.datetime_to_epoch(page['startedDateTime']),
             'archive': status_info['archive'],
             'label': status_info['label'],
             'crawlid': status_info['crawlid'],

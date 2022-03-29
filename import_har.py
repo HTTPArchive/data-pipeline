@@ -20,24 +20,6 @@ def parse_args(argv):
         # default='gs://httparchive/experimental/input/*',
         help='Input file to process.')
     parser.add_argument(
-        '--output',
-        dest='output',
-        # default='gs://httparchive/experimental/output',
-        # required=True,
-        help='Output file to write results to.')
-    parser.add_argument(
-        '--pages_table',
-        dest='pages_table',
-        default=constants.big_query_tables['pages'],
-        help='Full path to BigQuery table for pages'
-    )
-    parser.add_argument(
-        '--requests_table',
-        dest='requests_table',
-        default=constants.big_query_tables['requests'],
-        help='Full path to BigQuery table for requests'
-    )
-    parser.add_argument(
         '--subscription',
         dest='subscription',
         default=constants.subscription,
@@ -78,18 +60,6 @@ def run(argv=None):
 
         pages | beam.Map(print)  # TODO remove - for debugging
 
-        # TODO consider removing this step
-        #  only used for temporary history/troubleshooting, not necessary when using WriteToBigQuery.Method.FILE_LOADS
-        if known_args.output:
-            _ = pages | 'WritePagesToGCS' >> beam.io.WriteToText(
-                # file_path_prefix=os.path.join(known_args.output, 'page'),
-                file_path_prefix=apache_beam.GCSFileSystem.join(known_args.output, 'page'),
-                file_name_suffix='.jsonl')
-            _ = requests | 'WriteRequestsToGCS' >> beam.io.WriteToText(
-                # file_path_prefix=os.path.join(known_args.output, 'request'),
-                file_path_prefix=apache_beam.GCSFileSystem(known_args.output, 'request'),
-                file_name_suffix='.jsonl')
-
         if standard_options.streaming:
             # streaming pipeline
             big_query_params = {
@@ -98,6 +68,7 @@ def run(argv=None):
                 'write_disposition': BigQueryDisposition.WRITE_APPEND,
                 'triggering_frequency': 10,
                 'with_auto_sharding': True,  # TODO fixed sharding instead?
+                'ignore_unknown_columns ': True,  # beam v2.37.0 only valid for streaming inserts
 
                 # TODO monitor streaming performance and consider switching to using FILE_LOADS
                 # 'method': WriteToBigQuery.Method.FILE_LOADS,
@@ -109,11 +80,19 @@ def run(argv=None):
                 'write_disposition': BigQueryDisposition.WRITE_TRUNCATE,
                 'method': WriteToBigQuery.Method.FILE_LOADS,
                 'temp_file_format': FileFormat.JSON,
-                'schema': bigquery.SCHEMA_AUTODETECT,
+                'additional_bq_parameters': {'ignoreUnknownValues': True},
+                # 'schema': bigquery.SCHEMA_AUTODETECT,  # only use schema auto-detection for testing
             }
 
-        _ = pages | 'WritePagesToBigQuery' >> WriteToBigQuery(table=known_args.pages_table, **big_query_params)
-        _ = requests | 'WriteRequestsToBigQuery' >> WriteToBigQuery(table=known_args.requests_table, **big_query_params)
+        _ = pages | 'WritePagesToBigQuery' >> WriteToBigQuery(
+            table=lambda row: utils.format_table_name(row, 'pages'),
+            schema=constants.big_query['schemas']['pages'],
+            **big_query_params)
+
+        _ = requests | 'WriteRequestsToBigQuery' >> WriteToBigQuery(
+            table=lambda row: utils.format_table_name(row, 'requests'),
+            schema=constants.big_query['schemas']['requests'],
+            **big_query_params)
 
 
 if __name__ == '__main__':

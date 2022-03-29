@@ -1,5 +1,8 @@
+import datetime
 import hashlib
 import logging
+
+from modules import constants
 
 
 # TODO generic - replace with proper exceptions
@@ -125,3 +128,11 @@ def client_name(client):
         return 'desktop'
     elif client == 'android':
         return 'mobile'
+
+
+def format_table_name(row, table):
+    return '{}.{}_{}'.format(constants.big_query['datasets'][table], row['date'], row['client'])
+
+
+def datetime_to_epoch(dt):
+    return int(round(datetime.datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f%z').timestamp()))
