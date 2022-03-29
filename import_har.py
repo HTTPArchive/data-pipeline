@@ -2,9 +2,7 @@ import argparse
 import logging
 
 import apache_beam as beam
-import apache_beam.io.gcp.gcsfilesystem
 from apache_beam.io import WriteToBigQuery, BigQueryDisposition
-from apache_beam.io.gcp import bigquery
 from apache_beam.io.gcp.bigquery_tools import FileFormat
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 
