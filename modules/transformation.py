@@ -258,7 +258,7 @@ class ImportHarJson(beam.DoFn):
             'renderStart': page.get('_render'),
             'fullyLoaded': page.get('_fullyLoaded'),
             'visualComplete': page.get('_visualComplete'),
-            'onLoad': max(page.get('_docTime'), page.get('_visualComplete'), page.get('_fullyLoaded')),
+            'onLoad': page.get('_docTime') if page.get('_docTime') != 0 else max(page.get('_visualComplete'), page.get('_fullyLoaded')),
             'gzipTotal': page.get('_gzip_total'),
             'gzipSavings': page.get('_gzip_savings'),
             'numDomElements': page.get('_domElements'),
@@ -267,7 +267,7 @@ class ImportHarJson(beam.DoFn):
             'SpeedIndex': page.get('_SpeedIndex'),
             'PageSpeed': page.get('_pageSpeed', {}).get('score'),
             '_connections': page.get('_connections'),
-            '_adult_site': page.get('_adult_site'),
+            '_adult_site': page.get('_adult_site', False),
             'avg_dom_depth': page.get('_avg_dom_depth'),
             'doctype': page.get('_doctype'),
             'document_height': page.get('_document_height') if int(page.get('_document_height', 0)) > 0 else None,
@@ -331,7 +331,7 @@ class ImportHarJson(beam.DoFn):
                 if hostname not in domains:
                     domains[hostname] = 0
                 else:
-                    domains[hostname] += 0
+                    domains[hostname] += 1
             else:
                 logging.error("ERROR($gPagesTable pageid: {}): No hostname found in URL: {}", page_id, url)
 
@@ -371,7 +371,12 @@ class ImportHarJson(beam.DoFn):
         for domain in domains:
             max_domain_reqs = max(max_domain_reqs, domains[domain])
 
-        ret = {'reqTotal': req_total, 'bytesTotal': bytes_total}
+        ret = {
+            'reqTotal': req_total, 'bytesTotal': bytes_total,
+            'reqJS': count['script'], 'bytesJS': size['script'],
+            'reqImg': count['image'], 'bytesImg': size['image'],
+            'reqJson': 0, 'bytesJson': 0,
+        }
         for typ in typs:
             ret.update({
                 'req{}'.format(typ.title()): count[typ],
