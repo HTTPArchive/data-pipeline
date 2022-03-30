@@ -83,13 +83,12 @@ def get_format(pretty_typ, mime_typ, ext):
                 return typ
         if 'jpeg' in mime_typ:
             return 'jpg'
-    elif 'video' == pretty_typ:
+    if 'video' == pretty_typ:
         # Order by most popular first.
         for typ in ['flash', 'swf', 'mp4', 'flv', 'f4v']:
             if typ in mime_typ or typ == ext:
                 return typ
-    else:
-        return ''
+    return ''
 
 
 # Headers can appear multiple times, so we have to concat them all then add them to avoid setting a column twice.
@@ -128,6 +127,8 @@ def client_name(client):
         return 'desktop'
     elif client == 'android':
         return 'mobile'
+    else:
+        client.lower()
 
 
 def format_table_name(row, table):

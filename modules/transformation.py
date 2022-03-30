@@ -51,6 +51,29 @@ class ReadFiles(beam.PTransform):
         return files
 
 
+def initialize_status_info(file_name, page):
+    # file name parsing kept for backward compatibility before 2022-03-01
+    dir_name, base_name = os.path.split(file_name)
+
+    date = datetime.datetime.strptime(
+        page['testID'][:6] if page.get('testID') else base_name[:6],
+        '%y%m%d')
+
+    metadata = page.get('_metadata', {})
+
+    return {
+            'archive': 'All',  # only one value found when porting logic from PHP
+            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=date),
+            'crawlid': metadata.get('crawlid', 0),
+            'wptid': page.get('testID', base_name.split('.')[0]),
+            'medianRun': 1,  # TODO from rick - median.firstview.run
+            'pageid': metadata.get('pageid', hash(base_name)),  # hash file name for consistent id
+            'rank': int(metadata.get('rank', 0)),
+            'date': '{:%Y_%m_%d}'.format(date),
+            'client': utils.client_name(metadata.get('layout', dir_name.split('/')[-1].split('-')[0])),
+        }
+
+
 class ImportHarJson(beam.DoFn):
     def process(self, element, **kwargs):
         file_name, data = element
@@ -60,20 +83,6 @@ class ImportHarJson(beam.DoFn):
 
     @staticmethod
     def generate_pages(file_name, element):
-        dir_name, base_name = os.path.split(file_name)
-        file_date = datetime.datetime.strptime(base_name[:6], '%y%m%d')
-        status_info = {
-            'archive': 'All',  # only one value found when porting logic from PHP
-            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=file_date),
-            'crawlid': 0,  # TODO necessary with new pipeline?
-            'wptid': base_name.split('.')[0],  # TODO from rick use data.id instead of filename
-            'medianRun': 1,  # TODO from rick - median.firstview.run
-            'pageid': hash(base_name),  # hash file name for consistent id
-            'rank': '',  # TODO where to source this from?
-            'date': '{:%Y_%m_%d}'.format(file_date),
-            'client': utils.client_name(dir_name.split('/')[-1].split('-')[0]),
-        }
-
         if not element:
             utils.log_exeption_and_raise("HAR file read error.")
 
@@ -86,6 +95,8 @@ class ImportHarJson(beam.DoFn):
         pages = log['pages']
         if len(pages) == 0:
             utils.log_exeption_and_raise("No pages found")
+
+        status_info = initialize_status_info(file_name, pages[0])
 
         # STEP 1: Create a partial "page" record so we get a pageid.
         page = utils.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
@@ -270,11 +281,11 @@ class ImportHarJson(beam.DoFn):
             '_adult_site': page.get('_adult_site', False),
             'avg_dom_depth': page.get('_avg_dom_depth'),
             'doctype': page.get('_doctype'),
-            'document_height': page.get('_document_height') if int(page.get('_document_height', 0)) > 0 else None,
-            'document_width': page.get('_document_width') if int(page.get('_document_width', 0)) > 0 else None,
-            'localstorage_size': page.get('_localstorage_size') if int(page.get('_localstorage_size', 0)) > 0 else None,
+            'document_height': page.get('_document_height') if int(page.get('_document_height', 0)) > 0 else 0,
+            'document_width': page.get('_document_width') if int(page.get('_document_width', 0)) > 0 else 0,
+            'localstorage_size': page.get('_localstorage_size') if int(page.get('_localstorage_size', 0)) > 0 else 0,
             'sessionstorage_size': page.get('_sessionstorage_size') if int(
-                page.get('_sessionstorage_size', 0)) > 0 else None,
+                page.get('_sessionstorage_size', 0)) > 0 else 0,
             'meta_viewport': page.get('_meta_viewport'),
             'num_iframes': page.get('_num_iframes'),
             'num_scripts': page.get('_num_scripts'),
@@ -351,7 +362,8 @@ class ImportHarJson(beam.DoFn):
             else:
                 max_age_more += 1
 
-            bytes_html_doc = resp_size if entry.get('firstHtml') else ''  # CVSNO - can we get this UNgzipped?!
+            if entry.get('firstHtml'):
+                bytes_html_doc = resp_size  # CVSNO - can we get this UNgzipped?!
 
             status = entry.get('status')
             if 300 <= status < 400 and status != 304:
@@ -400,7 +412,7 @@ class ImportHarJson(beam.DoFn):
             'maxDomainReqs': max_domain_reqs,
             'wptid': status_info['wptid'],
             'wptrun': status_info['medianRun'],
-            'rank': status_info.get('rank', '')
+            'rank': status_info['rank']
         })
 
         return ret
