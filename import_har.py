@@ -28,14 +28,7 @@ def parse_args(argv):
 
 def run(argv=None):
     known_args, pipeline_args = parse_args(argv)
-    pipeline_options = PipelineOptions(
-        pipeline_args,
-        # TODO testing, move all hardcoded values below into run script
-        project='httparchive',
-        # staging_location='gs://httparchive/experimental/staging',
-        # temp_location='gs://httparchive/experimental/temp',
-        # streaming=True,
-    )
+    pipeline_options = PipelineOptions(pipeline_args)
     standard_options = pipeline_options.view_as(StandardOptions)
     if not (standard_options.streaming or known_args.input):
         utils.log_exeption_and_raise('Either one of --input or --streaming options must be provided')
