@@ -82,10 +82,19 @@ This pipeline can read inputs from two sources
 
 ## Dataflow
 
+### Logging
+
 > The work item requesting state read is no longer valid on the backend
 
 This log message is benign and expected when using an auto-scaling pipeline
 https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
+
+### Batch loads vs streaming inserts
+
+Various incompatibilities due to missing features
+* ignoring unknown columns for streaming inserts
+* missing dead-letter collections for batch loads
+* fixed vs auto-sharding
 
 ## Response cache-control max-age
 
@@ -94,3 +103,7 @@ Various parsing issues due to unhandled cases
 ## New file formats
 
 New file formats from responses will be noted in WARNING logs
+
+## mimetypes and file extensions
+
+Using ported custom logic from legacy PHP rather than standard libraries produces missing values and inconsistencies 
