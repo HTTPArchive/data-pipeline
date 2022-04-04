@@ -1,17 +1,10 @@
-import datetime
 import hashlib
-import logging
+import os
+from datetime import datetime
+
+import dateutil.parser
 
 from modules import constants
-
-
-# TODO generic - replace with proper exceptions
-def log_exeption_and_raise(msg, frm=None):
-    logging.exception(msg)
-    if frm:
-        raise RuntimeError(msg) from frm
-    else:
-        raise RuntimeError(msg)
 
 
 def remove_empty_keys(d):
@@ -122,10 +115,13 @@ def parse_header(input_headers, standard_headers, cookie_key, output_headers=Non
     return output_headers, ret_other, cookie_size
 
 
-def client_name(client):
-    if client == 'chrome':
+def client_name(file_name):
+    dir_name, base_name = os.path.split(file_name)
+    client = dir_name.split('/')[-1].split('-')[0]
+
+    if client == 'chrome' or '_Dx' in base_name:
         return 'desktop'
-    elif client == 'android':
+    elif client == 'android' or '_Mx' in base_name:
         return 'mobile'
     else:
         client.lower()
@@ -136,4 +132,12 @@ def format_table_name(row, table):
 
 
 def datetime_to_epoch(dt):
-    return int(round(datetime.datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f%z').timestamp()))
+    return int(round(dateutil.parser.parse(dt).timestamp()))
+
+
+def test_date(page, base_name):
+    return datetime.strptime(page['testID'][:6] if page.get('testID') else base_name[:6], '%y%m%d')
+
+
+def crawl_date(dir_name):
+    return dateutil.parser.parse(dir_name.split('/')[-1].split('-')[1].replace('_', ' '))

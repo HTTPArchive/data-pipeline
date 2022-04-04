@@ -6,27 +6,9 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub
-from apache_beam.transforms.combiners import Sample
 from dateutil import parser as date_parser
 
 from modules import constants, utils
-
-
-# helper for testing
-class SampleFiles(beam.PTransform):
-    def __init__(self, sample_size, timeout=1*60):
-        super().__init__()
-        self.sample_size = sample_size
-        self.timeout = timeout
-
-    def expand(self, input_or_inputs):
-        return (input_or_inputs
-                # | WindowInto(
-                #     FixedWindows(self.timeout),
-                #     trigger=Repeatedly(AfterAny(AfterCount(self.sample_size), AfterProcessingTime(self.timeout))),
-                #     accumulation_mode=AccumulationMode.DISCARDING)
-                | Sample.FixedSizeGlobally(self.sample_size)
-                | beam.FlatMap(lambda e: e))
 
 
 class ReadFiles(beam.PTransform):
@@ -41,6 +23,7 @@ class ReadFiles(beam.PTransform):
         if self.streaming:
             files = (p
                      | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
+                     | beam.Filter(lambda e: e.attributes['objectId'].endswith('.har.gz'))
                      | 'GetFileName' >> beam.Map(
                         lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}")
                      | 'ReadFile' >> beam.io.ReadAllFromText(with_filename=True))
@@ -55,9 +38,11 @@ def initialize_status_info(file_name, page):
     # file name parsing kept for backward compatibility before 2022-03-01
     dir_name, base_name = os.path.split(file_name)
 
-    date = datetime.datetime.strptime(
-        page['testID'][:6] if page.get('testID') else base_name[:6],
-        '%y%m%d')
+    # use crawl date instead of test date, should always be the first of the month
+    #  folder name contains the crawl date, file name contains the test date
+    # date = utils.test_date(page, base_name)
+    date = utils.crawl_date(dir_name)
+
 
     metadata = page.get('_metadata', {})
 
@@ -66,11 +51,11 @@ def initialize_status_info(file_name, page):
             'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=date),
             'crawlid': metadata.get('crawlid', 0),
             'wptid': page.get('testID', base_name.split('.')[0]),
-            'medianRun': 1,  # TODO from rick - median.firstview.run
+            'medianRun': 1,  # only available in RAW json (median.firstview.run), not HAR json
             'pageid': metadata.get('pageid', hash(base_name)),  # hash file name for consistent id
-            'rank': int(metadata.get('rank', 0)),
+            'rank': int(metadata['rank']) if metadata.get('rank') else None,
             'date': '{:%Y_%m_%d}'.format(date),
-            'client': utils.client_name(metadata.get('layout', dir_name.split('/')[-1].split('-')[0])),
+            'client': metadata.get('layout', utils.client_name(file_name)).lower(),
         }
 
 
@@ -84,17 +69,20 @@ class ImportHarJson(beam.DoFn):
     @staticmethod
     def generate_pages(file_name, element):
         if not element:
-            utils.log_exeption_and_raise("HAR file read error.")
+            logging.exception("HAR file read error.")
+            return
 
         try:
             har = json.loads(element)
-        except Exception as exp:
-            utils.log_exeption_and_raise("JSON decode failed", exp)
+        except Exception:
+            logging.exception(f"JSON decode failed for: {file_name}")
+            return
 
         log = har['log']
         pages = log['pages']
         if len(pages) == 0:
-            utils.log_exeption_and_raise("No pages found")
+            logging.exception(f"No pages found for: {file_name}")
+            return
 
         status_info = initialize_status_info(file_name, pages[0])
 
@@ -107,14 +95,13 @@ class ImportHarJson(beam.DoFn):
         # STEP 2: Create all the resources & associate them with the pageid.
         entries, first_url, first_html_url = ImportHarJson.import_entries(log['entries'], page_id, status_info)
         if not entries:
-            utils.log_exeption_and_raise("ImportEntries failed for pageid:{}", page_id)
+            logging.exception(f"import_entries() failed for status_info:{status_info}")
             return
         else:
             # STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
             agg_stats = ImportHarJson.aggregate_stats(entries, page_id, first_url, first_html_url, status_info)
             if not agg_stats:
-                logging.error("ERROR($gStatusTable statusid: {}): AggregateStats failed. Purging pageid {}",
-                              status_info['statusid'], page_id)
+                logging.exception(f"aggregate_stats() failed for status_info:{status_info}")
                 return
             else:
                 page.update(agg_stats)
@@ -141,7 +128,13 @@ class ImportHarJson(beam.DoFn):
             }
 
             # REQUEST
-            request = entry['request']
+            try:
+                request = entry['request']
+            except KeyError:
+                # TODO metric for failed parsing
+                logging.exception(f"Entry does not contain a request, status_info={status_info}, entry={entry}", exc_info=True)
+                continue
+
             url = request['url']
             request_headers, request_other_headers, request_cookie_size = utils.parse_header(
                 request['headers'], constants.ghReqHeaders, cookie_key='cookie')
@@ -196,21 +189,32 @@ class ImportHarJson(beam.DoFn):
             if cc and ('must-revalidate' in cc or 'no-cache' in cc or 'no-store' in cc):
                 # These directives dictate the response can NOT be cached.
                 exp_age = 0
-            elif cc and 'max-age=' in cc:
-                exp_age = int(re.findall(r"\d+", cc)[0])
+            elif cc and re.match(r"max-age=\d+", cc):
+                try:
+                    exp_age = int(re.findall(r"\d+", cc)[0])
+                except Exception:
+                    # TODO compare results from old and new pipeline for these errors
+                    logging.warning(f"Unable to parse max-age, cc:{cc}", exc_info=True)
             elif 'resp_expires' in response_headers:
                 # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
                 #     freshness_lifetime = expires_value - date_value
                 # If the Date: response header is present, we use that.
                 # Otherwise we fall back to $startedDateTime which is based on the client so might suffer from clock skew.
-                start_date = response_headers.get('resp_date')[0] \
-                    if 'resp_date' in response_headers \
-                    else ret_request['startedDateTime']
-                end_date = response_headers['resp_expires'][0]
                 try:
-                    exp_age = (date_parser.parse(end_date) - date_parser.parse(start_date)).total_seconds()
+                    start_date = date_parser.parse(response_headers.get('resp_date')[0]).timestamp() \
+                        if 'resp_date' in response_headers \
+                        else ret_request['startedDateTime']
+                    end_date = date_parser.parse(response_headers['resp_expires'][0]).timestamp()
+                    # TODO try regex to resolve issues parsing apache ExpiresByType Directive
+                    #   https://httpd.apache.org/docs/2.4/mod/mod_expires.html#expiresbytype
+                    # end_date = date_parser.parse(re.findall(r"\d+", response_headers['resp_expires'][0])[0]).timestamp()
+                    exp_age = end_date - start_date
                 except Exception:
-                    logging.exception("Could not parse dates start={}, end={}", start_date, end_date, exc_info=True)
+                    logging.warning(f"Could not parse dates. "
+                                      f"start=(resp_date:{response_headers.get('resp_date')},"
+                                      f"startedDateTime:{ret_request.get('startedDateTime')}), "
+                                      f"end=(resp_expires:{response_headers.get('resp_expires')}), "
+                                      f"status_info:{status_info}")
 
             ret_request.update({
                 'expAge': int(max(exp_age, 0))
@@ -281,11 +285,10 @@ class ImportHarJson(beam.DoFn):
             '_adult_site': page.get('_adult_site', False),
             'avg_dom_depth': page.get('_avg_dom_depth'),
             'doctype': page.get('_doctype'),
-            'document_height': page.get('_document_height') if int(page.get('_document_height', 0)) > 0 else 0,
-            'document_width': page.get('_document_width') if int(page.get('_document_width', 0)) > 0 else 0,
-            'localstorage_size': page.get('_localstorage_size') if int(page.get('_localstorage_size', 0)) > 0 else 0,
-            'sessionstorage_size': page.get('_sessionstorage_size') if int(
-                page.get('_sessionstorage_size', 0)) > 0 else 0,
+            'document_height': page['_document_height'] if page.get('_document_height') and int(page['_document_height']) > 0 else 0,
+            'document_width': page['_document_width'] if page.get('_document_width') and int(page['_document_width']) > 0 else 0,
+            'localstorage_size': page['_localstorage_size'] if page.get('_localstorage_size') and int(page['_localstorage_size']) > 0 else 0,
+            'sessionstorage_size': page['_sessionstorage_size'] if page.get('_sessionstorage_size') and int(page['_sessionstorage_size']) > 0 else 0,
             'meta_viewport': page.get('_meta_viewport'),
             'num_iframes': page.get('_num_iframes'),
             'num_scripts': page.get('_num_scripts'),
@@ -332,8 +335,11 @@ class ImportHarJson(beam.DoFn):
 
             frmt = entry.get('format')
             if frmt and pretty_type in ['image', 'video']:
-                count[frmt] += 1
-                size[frmt] += resp_size
+                if frmt not in typs:
+                    logging.warning(f"Unexpected type, found format:{frmt}, status_info:{status_info}")
+                else:
+                    count[frmt] += 1
+                    size[frmt] += resp_size
 
             # count unique domains (really hostnames)
             matches = re.findall(r'http[s]*://([^/]*)', url)

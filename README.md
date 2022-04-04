@@ -10,10 +10,10 @@ gcloud init
 gcloud auth login
 gcloud config set project httparchive
 
-PROJECT=gcloud config get-value project
+PROJECT=$(gcloud config get-value project)
 TOPIC=har-gcs
 SUBSCRIPTION=har-gcs-pipeline
-INPUT_PATH=experimental/input/
+INPUT_PATH=crawls
 BUCKET=gs://httparchive
 
 
@@ -40,11 +40,10 @@ gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ```commandline
 python import_har.py \
 --input=gs://httparchive/experimental/input/** \
---temp_location=gs://httparchive/experimental/temp \
---staging_location=gs://httparchive/experimental/staging \
---setup_file="D:\development\projects\HTTPArchive\data-pipeline\setup.py" \
+--temp_location=gs://httparchive-staging/experimental/temp \
+--staging_location=gs://httparchive-staging/experimental \
+--setup_file=./setup.py \
 --runner=DataflowRunner \
---save_main_session \
 --project=httparchive \
 --region=us-west1 \
 --machine_type=n1-standard-32 \
@@ -57,11 +56,10 @@ python import_har.py \
 --streaming \
 --enable_streaming_engine \
 --experiments=use_runner_v2 \
---temp_location=gs://httparchive/experimental/temp \
---staging_location=gs://httparchive/experimental/staging \
---setup_file="D:\development\projects\HTTPArchive\data-pipeline\setup.py" \
+--temp_location=gs://httparchive-staging/experimental/temp \
+--staging_location=gs://httparchive-staging/experimental \
+--setup_file=.setup.py \
 --runner=DataflowRunner \
---save_main_session \
 --project=httparchive \
 --region=us-west1 \
 --machine_type=n1-standard-32 \
@@ -70,11 +68,29 @@ python import_har.py \
 
 # Inputs
 
-- GCS -> Pub/Sub
+This pipeline can read inputs from two sources
+- GCS notifications to Pub/Sub
+- GCS file path (globbing is accepted)
 
 # Outputs
 
-- Pub/Sub - TODO: update topics when files have been processed
 - GCP DataFlow & Monitoring metrics - TODO: runtime metrics and dashboards
-- GCS - store ELT results (e.g. summary pages JSONL) temporarily with TTL
-- BigQuery - final landing zone
+- Dataflow temporary and staging artifacts in GCS
+- BigQuery (final landing zone)
+
+# Known issues
+
+## Dataflow
+
+> The work item requesting state read is no longer valid on the backend
+
+This log message is benign and expected when using an auto-scaling pipeline
+https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
+
+## Response cache-control max-age
+
+Various parsing issues due to unhandled cases
+
+## New file formats
+
+New file formats from responses will be noted in WARNING logs
