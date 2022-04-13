@@ -13,12 +13,6 @@ big_query = {
     },
 }
 
-# TODO replace with production values, or make parameters instead
-# topic = 'har-gcs'
-# subscription = 'projects/httparchive/subscriptions/har-gcs-pipeline'
-topic = 'har-gcs-experimental'
-subscription = 'projects/httparchive/subscriptions/har-gcs-experimental-sub'
-
 # mapping of headers to DB fields
 # IF YOU CHANGE THESE YOU HAVE TO REBUILD THE REQUESTS TABLE!!!!!!!!!!!!!!!!!!!!!!!!!!
 ghReqHeaders = {

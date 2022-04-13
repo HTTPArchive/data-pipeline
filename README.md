@@ -36,10 +36,13 @@ gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ```
 
 # Run the pipeline
-## batch
-```commandline
-python import_har.py \
---input=gs://httparchive/experimental/input/** \
+## Read from GCS (batch or streaming)
+
+Include `--streaming` to read from GCS with a streaming job.
+
+```shell
+python run_pipeline.py \
+--input=gs://httparchive/crawls/** \
 --temp_location=gs://httparchive-staging/experimental/temp \
 --staging_location=gs://httparchive-staging/experimental \
 --setup_file=./setup.py \
@@ -50,15 +53,16 @@ python import_har.py \
 --worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd
 ```
 
-## streaming
-```commandline
-python import_har.py \
+## Run from Pub/Sub
+```shell
+python run_pipeline.py \
+--subscription=projects/httparchive/subscriptions/har-gcs-sub \
 --streaming \
 --enable_streaming_engine \
 --experiments=use_runner_v2 \
 --temp_location=gs://httparchive-staging/experimental/temp \
 --staging_location=gs://httparchive-staging/experimental \
---setup_file=.setup.py \
+--setup_file=./setup.py \
 --runner=DataflowRunner \
 --project=httparchive \
 --region=us-west1 \

@@ -5,33 +5,89 @@ import os
 import re
 
 import apache_beam as beam
-from apache_beam.io import ReadFromPubSub
+from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
+import apache_beam.io.fileio as fileio
+from apache_beam.io.gcp.bigquery_tools import FileFormat
 from dateutil import parser as date_parser
 
 from modules import constants, utils
 
 
-class ReadFiles(beam.PTransform):
-    def __init__(self, streaming, subscription, _input):
+class ReadHarFiles(beam.PTransform):
+    def __init__(self, subscription=None, _input=None):
         super().__init__()
-        self.streaming = streaming
         self.subscription = subscription
         self.input = _input
 
     def expand(self, p):
-        # streaming pipeline
-        if self.streaming:
+        # PubSub pipeline
+        if self.subscription:
             files = (p
                      | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
                      | beam.Filter(lambda e: e.attributes['objectId'].endswith('.har.gz'))
                      | 'GetFileName' >> beam.Map(
                         lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}")
-                     | 'ReadFile' >> beam.io.ReadAllFromText(with_filename=True))
-        # batch pipeline
+                     | beam.io.ReadAllFromText(with_filename=True))
+        # GCS pipeline
         else:
-            files = p | 'ReadFile' >> beam.io.ReadFromTextWithFilename(self.input)
+            matching = self.input if '.har.gz' in self.input else f"{self.input}/*.har.gz"
+
+            # TODO using ReadAllFromText instead of ReadFromText[WithFilename] to avoid listing file sizes locally
+            #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
+            #   https://issues.apache.org/jira/browse/BEAM-9620
+            #   not an issue for the java SDK
+            #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
+            # files = p | beam.io.ReadFromTextWithFilename(matching)
+
+            files = (p
+                     | fileio.MatchFiles(matching)  # TODO replace with match continuously for streaming?
+                     | beam.Map(lambda f: f.path)
+                     # | beam.Reshuffle()
+                     | beam.io.ReadAllFromText(with_filename=True))
 
         return files
+
+
+class WriteBigQuery(beam.PTransform):
+    def __init__(self, table, schema, streaming=None):
+        super().__init__()
+        self.table = table
+        self.schema = schema
+        self.streaming = streaming
+
+    def resolve_params(self):
+        if self.streaming:
+            # streaming pipeline
+            return {
+                'create_disposition': BigQueryDisposition.CREATE_IF_NEEDED,
+                'write_disposition': BigQueryDisposition.WRITE_APPEND,
+                'with_auto_sharding': True,
+
+                # TODO try streaming again when `ignore_unknown_columns` works
+                #  `ignore_unknown_columns` broken for `STREAMING_INSERTS` until BEAM-14039 fix is released
+                #   https://issues.apache.org/jira/browse/BEAM-14039
+                #   https://github.com/apache/beam/pull/16999
+                # 'method': WriteToBigQuery.Method.STREAMING_INSERTS,
+                # 'ignore_unknown_columns': True,
+                # 'insert_retry_strategy': RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
+
+                'method': WriteToBigQuery.Method.FILE_LOADS,
+                'triggering_frequency': 5 * 60,  # seconds
+                'additional_bq_parameters': {'ignoreUnknownValues': True},
+            }
+        else:
+            # batch pipeline
+            return {
+                'create_disposition': BigQueryDisposition.CREATE_IF_NEEDED,
+                'write_disposition': BigQueryDisposition.WRITE_TRUNCATE,
+                'method': WriteToBigQuery.Method.FILE_LOADS,
+                'temp_file_format': FileFormat.JSON,
+                'additional_bq_parameters': {'ignoreUnknownValues': True},
+                # 'schema': bigquery.SCHEMA_AUTODETECT,  # only use schema auto-detection for testing
+            }
+
+    def expand(self, pcoll, **kwargs):
+        return pcoll | WriteToBigQuery(table=self.table, schema=self.schema, **self.resolve_params())
 
 
 def initialize_status_info(file_name, page):
@@ -43,20 +99,19 @@ def initialize_status_info(file_name, page):
     # date = utils.test_date(page, base_name)
     date = utils.crawl_date(dir_name)
 
-
     metadata = page.get('_metadata', {})
 
     return {
-            'archive': 'All',  # only one value found when porting logic from PHP
-            'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=date),
-            'crawlid': metadata.get('crawlid', 0),
-            'wptid': page.get('testID', base_name.split('.')[0]),
-            'medianRun': 1,  # only available in RAW json (median.firstview.run), not HAR json
-            'pageid': metadata.get('pageid', hash(base_name)),  # hash file name for consistent id
-            'rank': int(metadata['rank']) if metadata.get('rank') else None,
-            'date': '{:%Y_%m_%d}'.format(date),
-            'client': metadata.get('layout', utils.client_name(file_name)).lower(),
-        }
+        'archive': 'All',  # only one value found when porting logic from PHP
+        'label': '{dt:%b} {dt.day} {dt.year}'.format(dt=date),
+        'crawlid': metadata.get('crawlid', 0),
+        'wptid': page.get('testID', base_name.split('.')[0]),
+        'medianRun': 1,  # only available in RAW json (median.firstview.run), not HAR json
+        'pageid': metadata.get('pageid', hash(base_name)),  # hash file name for consistent id
+        'rank': int(metadata['rank']) if metadata.get('rank') else None,
+        'date': '{:%Y_%m_%d}'.format(date),
+        'client': metadata.get('layout', utils.client_name(file_name)).lower(),
+    }
 
 
 class ImportHarJson(beam.DoFn):
@@ -121,7 +176,8 @@ class ImportHarJson(beam.DoFn):
                 'date': status_info['date'],
                 'pageid': pageid,
                 'crawlid': status_info['crawlid'],
-                'startedDateTime': utils.datetime_to_epoch(entry['startedDateTime']),  # we use this below for expAge calculation
+                # we use this below for expAge calculation
+                'startedDateTime': utils.datetime_to_epoch(entry['startedDateTime']),
                 'time': entry['time'],
                 '_cdn_provider': entry.get('_cdn_provider'),
                 '_gzip_save': entry.get('_gzip_save')  # amount response WOULD have been reduced if it had been gzipped
@@ -132,7 +188,7 @@ class ImportHarJson(beam.DoFn):
                 request = entry['request']
             except KeyError:
                 # TODO metric for failed parsing
-                logging.exception(f"Entry does not contain a request, status_info={status_info}, entry={entry}", exc_info=True)
+                logging.warning(f"Entry does not contain a request, status_info={status_info}, entry={entry}")
                 continue
 
             url = request['url']
@@ -199,7 +255,7 @@ class ImportHarJson(beam.DoFn):
                 # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
                 #     freshness_lifetime = expires_value - date_value
                 # If the Date: response header is present, we use that.
-                # Otherwise we fall back to $startedDateTime which is based on the client so might suffer from clock skew.
+                # Otherwise, fall back to $startedDateTime which is based on the client so might suffer from clock skew.
                 try:
                     start_date = date_parser.parse(response_headers.get('resp_date')[0]).timestamp() \
                         if 'resp_date' in response_headers \
@@ -207,14 +263,15 @@ class ImportHarJson(beam.DoFn):
                     end_date = date_parser.parse(response_headers['resp_expires'][0]).timestamp()
                     # TODO try regex to resolve issues parsing apache ExpiresByType Directive
                     #   https://httpd.apache.org/docs/2.4/mod/mod_expires.html#expiresbytype
-                    # end_date = date_parser.parse(re.findall(r"\d+", response_headers['resp_expires'][0])[0]).timestamp()
+                    # end_date = date_parser.parse(
+                    #   re.findall(r"\d+", response_headers['resp_expires'][0])[0]).timestamp()
                     exp_age = end_date - start_date
                 except Exception:
                     logging.warning(f"Could not parse dates. "
-                                      f"start=(resp_date:{response_headers.get('resp_date')},"
-                                      f"startedDateTime:{ret_request.get('startedDateTime')}), "
-                                      f"end=(resp_expires:{response_headers.get('resp_expires')}), "
-                                      f"status_info:{status_info}")
+                                    f"start=(resp_date:{response_headers.get('resp_date')},"
+                                    f"startedDateTime:{ret_request.get('startedDateTime')}), "
+                                    f"end=(resp_expires:{response_headers.get('resp_expires')}), "
+                                    f"status_info:{status_info}")
 
             ret_request.update({
                 'expAge': int(max(exp_age, 0))
@@ -273,7 +330,8 @@ class ImportHarJson(beam.DoFn):
             'renderStart': page.get('_render'),
             'fullyLoaded': page.get('_fullyLoaded'),
             'visualComplete': page.get('_visualComplete'),
-            'onLoad': page.get('_docTime') if page.get('_docTime') != 0 else max(page.get('_visualComplete'), page.get('_fullyLoaded')),
+            'onLoad': page.get('_docTime') if page.get('_docTime') != 0 else max(page.get('_visualComplete'),
+                                                                                 page.get('_fullyLoaded')),
             'gzipTotal': page.get('_gzip_total'),
             'gzipSavings': page.get('_gzip_savings'),
             'numDomElements': page.get('_domElements'),
@@ -285,10 +343,14 @@ class ImportHarJson(beam.DoFn):
             '_adult_site': page.get('_adult_site', False),
             'avg_dom_depth': page.get('_avg_dom_depth'),
             'doctype': page.get('_doctype'),
-            'document_height': page['_document_height'] if page.get('_document_height') and int(page['_document_height']) > 0 else 0,
-            'document_width': page['_document_width'] if page.get('_document_width') and int(page['_document_width']) > 0 else 0,
-            'localstorage_size': page['_localstorage_size'] if page.get('_localstorage_size') and int(page['_localstorage_size']) > 0 else 0,
-            'sessionstorage_size': page['_sessionstorage_size'] if page.get('_sessionstorage_size') and int(page['_sessionstorage_size']) > 0 else 0,
+            'document_height': page['_document_height'] if page.get('_document_height') and int(
+                page['_document_height']) > 0 else 0,
+            'document_width': page['_document_width'] if page.get('_document_width') and int(
+                page['_document_width']) > 0 else 0,
+            'localstorage_size': page['_localstorage_size'] if page.get('_localstorage_size') and int(
+                page['_localstorage_size']) > 0 else 0,
+            'sessionstorage_size': page['_sessionstorage_size'] if page.get('_sessionstorage_size') and int(
+                page['_sessionstorage_size']) > 0 else 0,
             'meta_viewport': page.get('_meta_viewport'),
             'num_iframes': page.get('_num_iframes'),
             'num_scripts': page.get('_num_scripts'),
