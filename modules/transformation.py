@@ -117,9 +117,13 @@ def initialize_status_info(file_name, page):
 class ImportHarJson(beam.DoFn):
     def process(self, element, **kwargs):
         file_name, data = element
-        page, requests = self.generate_pages(file_name, data)
-        yield beam.pvalue.TaggedOutput('page', page)
-        yield beam.pvalue.TaggedOutput('requests', requests)
+        try:
+            page, requests = self.generate_pages(file_name, data)
+            yield beam.pvalue.TaggedOutput('page', page)
+            yield beam.pvalue.TaggedOutput('requests', requests)
+        except Exception:
+            logging.error(f"Unable to unpack HAR, check previous logs for detailed errors. "
+                          f"file_name={file_name}, element={element}")
 
     @staticmethod
     def generate_pages(file_name, element):
