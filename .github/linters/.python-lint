@@ -208,6 +208,8 @@ redefining-builtins-modules=six.moves,past.builtins,future.builtins
 # Logging modules to check that the string format arguments are in logging
 # function parameter format
 logging-modules=logging
+# Use old style formatting to allow muti-argument logging
+logging-format-style=old
 
 
 [TYPECHECK]

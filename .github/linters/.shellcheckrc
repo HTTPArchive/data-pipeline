@@ -1,5 +1,0 @@
-# Look for 'source'd files relative to the checked script
-source-path=SCRIPTDIR
-
-# Ignore commented out line errors
-disable=SC1143
