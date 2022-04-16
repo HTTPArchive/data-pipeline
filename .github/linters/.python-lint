@@ -127,7 +127,8 @@ disable=print-statement,
         next-method-defined,
         dict-items-not-iterating,
         dict-keys-not-iterating,
-        dict-values-not-iterating
+        dict-values-not-iterating,
+        logging-too-many-args
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -208,8 +209,6 @@ redefining-builtins-modules=six.moves,past.builtins,future.builtins
 # Logging modules to check that the string format arguments are in logging
 # function parameter format
 logging-modules=logging
-# Use old style formatting to allow muti-argument logging
-logging-format-style=old
 
 
 [TYPECHECK]
