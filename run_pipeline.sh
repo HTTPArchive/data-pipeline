@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2211,SC2215
 python3 run_pipeline.py \
 #  --input=gs://httparchive/chrome-Jan_1_2022 \
   --input=gs://httparchive/experimental/input/** \

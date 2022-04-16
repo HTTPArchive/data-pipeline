@@ -1,7 +1,7 @@
 # data-pipeline
 The new HTTP Archive data pipeline built entirely on GCP
 
-# Initial setup
+## Initial setup
 TODO: follow known instructions
 
 ```shell
@@ -30,13 +30,13 @@ gsutil notification create \
     $BUCKET
 ```
 
-# Checking Pub/Sub notifications
+## Checking Pub/Sub notifications
 ```shell
 gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ```
 
-# Run the pipeline
-## Read from GCS (batch or streaming)
+## Run the pipeline
+### Read from GCS (batch or streaming)
 
 Include `--streaming` to read from GCS with a streaming job.
 
@@ -53,7 +53,7 @@ python run_pipeline.py \
 --worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd
 ```
 
-## Run from Pub/Sub
+### Run from Pub/Sub
 ```shell
 python run_pipeline.py \
 --subscription=projects/httparchive/subscriptions/har-gcs-sub \
@@ -70,44 +70,44 @@ python run_pipeline.py \
 --worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd
 ```
 
-# Inputs
+## Inputs
 
 This pipeline can read inputs from two sources
 - GCS notifications to Pub/Sub
 - GCS file path (globbing is accepted)
 
-# Outputs
+## Outputs
 
 - GCP DataFlow & Monitoring metrics - TODO: runtime metrics and dashboards
 - Dataflow temporary and staging artifacts in GCS
 - BigQuery (final landing zone)
 
-# Known issues
+## Known issues
 
-## Dataflow
+### Dataflow
 
-### Logging
+#### Logging
 
 > The work item requesting state read is no longer valid on the backend
 
 This log message is benign and expected when using an auto-scaling pipeline
 https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
 
-### Batch loads vs streaming inserts
+#### Batch loads vs streaming inserts
 
 Various incompatibilities due to missing features
 * ignoring unknown columns for streaming inserts
 * missing dead-letter collections for batch loads
 * fixed vs auto-sharding
 
-## Response cache-control max-age
+### Response cache-control max-age
 
 Various parsing issues due to unhandled cases
 
-## New file formats
+### New file formats
 
 New file formats from responses will be noted in WARNING logs
 
-## mimetypes and file extensions
+### mimetypes and file extensions
 
-Using ported custom logic from legacy PHP rather than standard libraries produces missing values and inconsistencies 
+Using ported custom logic from legacy PHP rather than standard libraries produces missing values and inconsistencies
