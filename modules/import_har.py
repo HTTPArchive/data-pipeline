@@ -37,10 +37,11 @@ def run(argv=None):
     # TODO add metric counters for files in, processed, written to GCP & BQ
 
     with beam.Pipeline(options=pipeline_options) as p:
-        parsed = (p
-                  | ReadHarFiles(known_args.subscription, known_args.input)
-                  | 'ParseHar' >> beam.ParDo(ImportHarJson()).with_outputs('page', 'requests')
-                  )
+        parsed = (
+            p
+            | ReadHarFiles(known_args.subscription, known_args.input)
+            | 'ParseHar' >> beam.ParDo(ImportHarJson()).with_outputs('page', 'requests')
+        )
         pages, requests = parsed
         requests = requests | 'FlattenRequests' >> beam.FlatMap(lambda elements: elements)
 

@@ -22,12 +22,14 @@ class ReadHarFiles(beam.PTransform):
     def expand(self, p):
         # PubSub pipeline
         if self.subscription:
-            files = (p
-                     | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
-                     | beam.Filter(lambda e: e.attributes['objectId'].endswith('.har.gz'))
-                     | 'GetFileName' >> beam.Map(
-                        lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}")
-                     | beam.io.ReadAllFromText(with_filename=True))
+            files = (
+                p
+                | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
+                | beam.Filter(lambda e: e.attributes['objectId'].endswith('.har.gz'))
+                | 'GetFileName' >> beam.Map(
+                    lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}")
+                | beam.io.ReadAllFromText(with_filename=True)
+            )
         # GCS pipeline
         else:
             matching = self.input if '.har.gz' in self.input else f"{self.input}/*.har.gz"
@@ -39,11 +41,13 @@ class ReadHarFiles(beam.PTransform):
             #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
             # files = p | beam.io.ReadFromTextWithFilename(matching)
 
-            files = (p
-                     | fileio.MatchFiles(matching)  # TODO replace with match continuously for streaming?
-                     | beam.Map(lambda f: f.path)
-                     # | beam.Reshuffle()
-                     | beam.io.ReadAllFromText(with_filename=True))
+            files = (
+                p
+                | fileio.MatchFiles(matching)  # TODO replace with match continuously for streaming?
+                | beam.Map(lambda f: f.path)
+                # | beam.Reshuffle()
+                | beam.io.ReadAllFromText(with_filename=True)
+            )
 
         return files
 
@@ -122,8 +126,10 @@ class ImportHarJson(beam.DoFn):
             yield beam.pvalue.TaggedOutput('page', page)
             yield beam.pvalue.TaggedOutput('requests', requests)
         except Exception:
-            logging.error(f"Unable to unpack HAR, check previous logs for detailed errors. "
-                          f"file_name={file_name}, element={element}")
+            logging.error(
+                f"Unable to unpack HAR, check previous logs for detailed errors. "
+                f"file_name={file_name}, element={element}"
+            )
 
     @staticmethod
     def generate_pages(file_name, element):
@@ -290,8 +296,10 @@ class ImportHarJson(beam.DoFn):
             first_html = False
             if not first_url:
                 if (400 <= status <= 599) or 12000 <= status:
-                    logging.error("ERROR($gPagesTable pageid: {}): The first request ({}}) failed with status {}}.",
-                                  pageid, url, status)
+                    logging.error(
+                        "ERROR($gPagesTable pageid: {}): The first request ({}}) failed with status {}}.",
+                        pageid, url, status
+                    )
                     return None
                 # This is the first URL found associated with the page - assume it's the base URL.
                 first_req = True
@@ -334,8 +342,10 @@ class ImportHarJson(beam.DoFn):
             'renderStart': page.get('_render'),
             'fullyLoaded': page.get('_fullyLoaded'),
             'visualComplete': page.get('_visualComplete'),
-            'onLoad': page.get('_docTime') if page.get('_docTime') != 0 else max(page.get('_visualComplete'),
-                                                                                 page.get('_fullyLoaded')),
+            'onLoad':
+                page.get('_docTime')
+                if page.get('_docTime') != 0
+                else max(page.get('_visualComplete'), page.get('_fullyLoaded')),
             'gzipTotal': page.get('_gzip_total'),
             'gzipSavings': page.get('_gzip_savings'),
             'numDomElements': page.get('_domElements'),
