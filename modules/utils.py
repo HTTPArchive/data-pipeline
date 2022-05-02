@@ -22,12 +22,12 @@ def get_ext(ext):
     if i_q > -1:
         ret_ext = ret_ext[:i_q]
 
-    ret_ext = ret_ext[ret_ext.rfind("/") + 1 :]
+    ret_ext = ret_ext[ret_ext.rfind("/") + 1:]
     i_dot = ret_ext.rfind(".")
     if i_dot == -1:
         ret_ext = ""
     else:
-        ret_ext = ret_ext[i_dot + 1 :]
+        ret_ext = ret_ext[i_dot + 1:]
         if len(ret_ext) > 5:
             # This technique can find VERY long strings that are not file extensions. Try to weed those out.
             ret_ext = ""
