@@ -114,3 +114,6 @@ class Test(TestCase):
 
     def test_get_format_exceptional(self):
         self.assertEqual(utils.get_format("foo", "bar", "baz"), "")
+
+    def test_datetime_to_epoch_empty(self):
+        self.assertIsNone(utils.datetime_to_epoch("not-a-date", {"foo": "bar"}))

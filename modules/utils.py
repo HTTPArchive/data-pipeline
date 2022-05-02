@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 from datetime import datetime
 
@@ -157,8 +158,14 @@ def format_table_name(row, table):
     )
 
 
-def datetime_to_epoch(dt):
-    return int(round(dateutil.parser.parse(dt).timestamp()))
+def datetime_to_epoch(dt, status_info):
+    try:
+        return int(round(dateutil.parser.parse(dt).timestamp()))
+    except dateutil.parser.ParserError:
+        logging.warning(
+            f"Could not parse datetime to epoch. dt={dt},status_info={status_info}"
+        )
+        return None
 
 
 def test_date(page, base_name):

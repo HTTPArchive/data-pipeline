@@ -203,7 +203,9 @@ class ImportHarJson(beam.DoFn):
                 "pageid": pageid,
                 "crawlid": status_info["crawlid"],
                 # we use this below for expAge calculation
-                "startedDateTime": utils.datetime_to_epoch(entry["startedDateTime"]),
+                "startedDateTime": utils.datetime_to_epoch(
+                    entry["startedDateTime"], status_info
+                ),
                 "time": entry["time"],
                 "_cdn_provider": entry.get("_cdn_provider"),
                 # amount response WOULD have been reduced if it had been gzipped
@@ -384,7 +386,9 @@ class ImportHarJson(beam.DoFn):
             "date": status_info["date"],
             "pageid": status_info["pageid"],
             "createDate": int(datetime.datetime.now().timestamp()),
-            "startedDateTime": utils.datetime_to_epoch(page["startedDateTime"]),
+            "startedDateTime": utils.datetime_to_epoch(
+                page["startedDateTime"], status_info
+            ),
             "archive": status_info["archive"],
             "label": status_info["label"],
             "crawlid": status_info["crawlid"],
