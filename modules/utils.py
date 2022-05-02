@@ -124,7 +124,7 @@ def client_name(file_name):
     elif client == 'android' or '_Mx' in base_name:
         return 'mobile'
     else:
-        client.lower()
+        return client.lower()
 
 
 def format_table_name(row, table):
