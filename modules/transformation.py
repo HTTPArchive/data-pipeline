@@ -7,7 +7,7 @@ import re
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
 import apache_beam.io.fileio as fileio
-from apache_beam.io.gcp.bigquery_tools import FileFormat
+from apache_beam.io.gcp.bigquery_tools import FileFormat, RetryStrategy
 from dateutil import parser as date_parser
 
 from modules import constants, utils
@@ -44,8 +44,8 @@ class ReadHarFiles(beam.PTransform):
             files = (
                 p
                 | fileio.MatchFiles(matching)  # TODO replace with match continuously for streaming?
-                | beam.Map(lambda f: f.path)
-                # | beam.Reshuffle()
+                     | 'ExtractPath' >> beam.Map(lambda f: f.path)
+                     | beam.Reshuffle()
                 | beam.io.ReadAllFromText(with_filename=True)
             )
 
@@ -67,17 +67,15 @@ class WriteBigQuery(beam.PTransform):
                 'write_disposition': BigQueryDisposition.WRITE_APPEND,
                 'with_auto_sharding': True,
 
-                # TODO try streaming again when `ignore_unknown_columns` works
-                #  `ignore_unknown_columns` broken for `STREAMING_INSERTS` until BEAM-14039 fix is released
-                #   https://issues.apache.org/jira/browse/BEAM-14039
-                #   https://github.com/apache/beam/pull/16999
-                # 'method': WriteToBigQuery.Method.STREAMING_INSERTS,
-                # 'ignore_unknown_columns': True,
-                # 'insert_retry_strategy': RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
+                # parameters for STREAMING_INSERTS
+                'method': WriteToBigQuery.Method.STREAMING_INSERTS,
+                'ignore_unknown_columns': True,
+                'insert_retry_strategy': RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
 
-                'method': WriteToBigQuery.Method.FILE_LOADS,
-                'triggering_frequency': 5 * 60,  # seconds
-                'additional_bq_parameters': {'ignoreUnknownValues': True},
+                # parameters for FILE_LOADS
+                # 'method': WriteToBigQuery.Method.FILE_LOADS,
+                # 'triggering_frequency': 5 * 60,  # seconds
+                # 'additional_bq_parameters': {'ignoreUnknownValues': True},
             }
         else:
             # batch pipeline
@@ -87,7 +85,6 @@ class WriteBigQuery(beam.PTransform):
                 'method': WriteToBigQuery.Method.FILE_LOADS,
                 'temp_file_format': FileFormat.JSON,
                 'additional_bq_parameters': {'ignoreUnknownValues': True},
-                # 'schema': bigquery.SCHEMA_AUTODETECT,  # only use schema auto-detection for testing
             }
 
     def expand(self, pcoll, **kwargs):
@@ -126,7 +123,7 @@ class ImportHarJson(beam.DoFn):
             yield beam.pvalue.TaggedOutput('page', page)
             yield beam.pvalue.TaggedOutput('requests', requests)
         except Exception:
-            logging.error(
+            logging.exception(
                 f"Unable to unpack HAR, check previous logs for detailed errors. "
                 f"file_name={file_name}, element={element}"
             )
@@ -134,40 +131,42 @@ class ImportHarJson(beam.DoFn):
     @staticmethod
     def generate_pages(file_name, element):
         if not element:
-            logging.exception("HAR file read error.")
-            return
+            logging.warning("HAR file read error.")
+            return None
 
         try:
             har = json.loads(element)
         except Exception:
-            logging.exception(f"JSON decode failed for: {file_name}")
-            return
+            logging.warning(f"JSON decode failed for: {file_name}", exc_info=True)
+            return None
 
         log = har['log']
         pages = log['pages']
         if len(pages) == 0:
-            logging.exception(f"No pages found for: {file_name}")
-            return
+            logging.warning(f"No pages found for: {file_name}")
+            return None
 
         status_info = initialize_status_info(file_name, pages[0])
 
         # STEP 1: Create a partial "page" record so we get a pageid.
-        page = utils.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
-        if not page:
-            return
-        page_id = page['pageid']
+        try:
+            page = utils.remove_empty_keys(ImportHarJson.import_page(pages[0], status_info).items())
+            page_id = page['pageid']
+        except Exception:
+            logging.warning(f"import_page() failed for status_info:{status_info}", exc_info=True)
+            return None
 
         # STEP 2: Create all the resources & associate them with the pageid.
         entries, first_url, first_html_url = ImportHarJson.import_entries(log['entries'], page_id, status_info)
         if not entries:
-            logging.exception(f"import_entries() failed for status_info:{status_info}")
-            return
+            logging.warning(f"import_entries() failed for status_info:{status_info}")
+            return None
         else:
             # STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
             agg_stats = ImportHarJson.aggregate_stats(entries, page_id, first_url, first_html_url, status_info)
             if not agg_stats:
-                logging.exception(f"aggregate_stats() failed for status_info:{status_info}")
-                return
+                logging.warning(f"aggregate_stats() failed for status_info:{status_info}")
+                return None
             else:
                 page.update(agg_stats)
 
@@ -281,7 +280,7 @@ class ImportHarJson(beam.DoFn):
                                     f"start=(resp_date:{response_headers.get('resp_date')},"
                                     f"startedDateTime:{ret_request.get('startedDateTime')}), "
                                     f"end=(resp_expires:{response_headers.get('resp_expires')}), "
-                                    f"status_info:{status_info}")
+                                    f"status_info:{status_info}", exc_info=True)
 
             ret_request.update({
                 'expAge': int(max(exp_age, 0))
@@ -321,10 +320,6 @@ class ImportHarJson(beam.DoFn):
 
     @staticmethod
     def import_page(page, status_info):
-        if not (status_info.get('label') and status_info.get('archive')):
-            logging.exception("'label' or 'crawlid' was null in import_page")
-            return None
-
         return {
             'client': status_info['client'],
             'date': status_info['date'],
@@ -378,10 +373,10 @@ class ImportHarJson(beam.DoFn):
         # CVSNO - move this error checking to the point before this function is called
         if not first_url:
             logging.error("ERROR($gPagesTable pageid: {}}): no first URL found.", page_id)
-            return
+            return None
         if not first_html_url:
             logging.error("ERROR($gPagesTable pageid: {}): no first HTML URL found.", page_id)
-            return
+            return None
 
         # initialize variables for counting the page's stats
         bytes_total = 0
