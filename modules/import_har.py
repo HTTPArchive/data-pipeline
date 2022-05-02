@@ -12,13 +12,11 @@ def parse_args(argv):
     parser.add_argument(
         '--input',
         dest='input',
-        # default='gs://httparchive/experimental/input/*',
         help='Input file to process.')
     parser.add_argument(
         '--subscription',
         dest='subscription',
-        # default='projects/httparchive/subscriptions/har-gcs-pipeline',
-        # default='projects/httparchive/subscriptions/har-gcs-experimental-sub',
+        default='projects/httparchive/subscriptions/har-gcs-pipeline',
         help='Pub/Sub subscription'
     )
     return parser.parse_known_args(argv)
