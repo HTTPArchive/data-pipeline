@@ -1,4 +1,3 @@
-from json import JSONDecodeError
 from unittest import TestCase
 
 from modules.transformation import ImportHarJson
