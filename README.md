@@ -35,6 +35,15 @@ gsutil notification create \
 gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ```
 
+## Manually backfill from GCS to Pub/Sub
+TODO: not viable, too slow
+
+```shell
+gsutil ls gs://httparchive/crawls/** | \
+sed -r 's/gs:\/\/([^\/]*)\/(.*)/bucketId=\1,objectId=\2/g' | \
+while IFS= read -r f; do gcloud pubsub topics publish projects/httparchive/topics/har-gcs --attribute=$f; done
+```
+
 ## Run the pipeline
 ### Read from GCS (batch or streaming)
 
@@ -96,7 +105,6 @@ https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
 #### Batch loads vs streaming inserts
 
 Various incompatibilities due to missing features
-* ignoring unknown columns for streaming inserts
 * missing dead-letter collections for batch loads
 * fixed vs auto-sharding
 

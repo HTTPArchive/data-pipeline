@@ -46,13 +46,13 @@ def run(argv=None):
 
         _ = pages | "WritePagesToBigQuery" >> WriteBigQuery(
             table=lambda row: utils.format_table_name(row, "pages"),
-            schema=constants.big_query["schemas"]["pages"],
+            schema=constants.bigquery["schemas"]["pages"],
             streaming=standard_options.streaming,
         )
 
         _ = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
             table=lambda row: utils.format_table_name(row, "requests"),
-            schema=constants.big_query["schemas"]["requests"],
+            schema=constants.bigquery["schemas"]["requests"],
             streaming=standard_options.streaming,
         )
 

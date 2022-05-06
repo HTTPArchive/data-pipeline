@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import os
-from datetime import datetime
 
 import dateutil.parser
 
@@ -154,7 +153,7 @@ def client_name(file_name):
 
 def format_table_name(row, table):
     return "{}.{}_{}".format(
-        constants.big_query["datasets"][table], row["date"], row["client"]
+        constants.bigquery["datasets"][table], row["date"], row["client"]
     )
 
 
@@ -166,12 +165,6 @@ def datetime_to_epoch(dt, status_info):
             f"Could not parse datetime to epoch. dt={dt},status_info={status_info}"
         )
         return None
-
-
-def test_date(page, base_name):
-    return datetime.strptime(
-        page["testID"][:6] if page.get("testID") else base_name[:6], "%y%m%d"
-    )
 
 
 def crawl_date(dir_name):

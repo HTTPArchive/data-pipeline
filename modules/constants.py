@@ -2,7 +2,7 @@ import importlib.resources as pkg_resources
 import json
 
 # TODO remove 'experimental' before going live
-big_query = {
+bigquery = {
     "datasets": {
         "pages": "httparchive:experimental_summary_pages",
         "requests": "httparchive:experimental_summary_requests",
@@ -22,7 +22,6 @@ big_query = {
 }
 
 # mapping of headers to DB fields
-# IF YOU CHANGE THESE YOU HAVE TO REBUILD THE REQUESTS TABLE!!!!!!!!!!!!!!!!!!!!!!!!!!
 ghReqHeaders = {
     "accept": "req_accept",
     "accept-charset": "req_accept_charset",

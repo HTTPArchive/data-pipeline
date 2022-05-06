@@ -39,13 +39,11 @@ class ReadHarFiles(beam.PTransform):
                 self.input if ".har.gz" in self.input else f"{self.input}/*.har.gz"
             )
 
-            # TODO using ReadAllFromText instead of ReadFromText[WithFilename] to avoid listing file sizes locally
+            # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
             #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
             #   https://issues.apache.org/jira/browse/BEAM-9620
             #   not an issue for the java SDK
             #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
-            # files = p | beam.io.ReadFromTextWithFilename(matching)
-
             files = (
                 p
                 # TODO replace with match continuously for streaming?
@@ -101,9 +99,6 @@ def initialize_status_info(file_name, page):
     # file name parsing kept for backward compatibility before 2022-03-01
     dir_name, base_name = os.path.split(file_name)
 
-    # use crawl date instead of test date, should always be the first of the month
-    #  folder name contains the crawl date, file name contains the test date
-    # date = utils.test_date(page, base_name)
     date = utils.crawl_date(dir_name)
 
     metadata = page.get("_metadata", {})
@@ -114,8 +109,11 @@ def initialize_status_info(file_name, page):
         "crawlid": metadata.get("crawlid", 0),
         "wptid": page.get("testID", base_name.split(".")[0]),
         "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
+        "page": metadata.get(
+            "page", None  # TODO future improvement, not populated as of 2022-05
+        ),
         "pageid": metadata.get(
-            "pageid", hash(base_name)  # hash file name for consistent id
+            "pageid", None  # TODO deprecate in favor of newer `page` field
         ),
         "rank": int(metadata["rank"]) if metadata.get("rank") else None,
         "date": "{:%Y_%m_%d}".format(date),
@@ -156,29 +154,23 @@ class ImportHarJson(beam.DoFn):
 
         status_info = initialize_status_info(file_name, pages[0])
 
-        # STEP 1: Create a partial "page" record so we get a pageid.
         try:
-            page = utils.remove_empty_keys(
-                ImportHarJson.import_page(pages[0], status_info).items()
-            )
-            page_id = page["pageid"]
+            page = ImportHarJson.import_page(pages[0], status_info).items()
         except Exception:
             logging.warning(
                 f"import_page() failed for status_info:{status_info}", exc_info=True
             )
             return None
 
-        # STEP 2: Create all the resources & associate them with the pageid.
         entries, first_url, first_html_url = ImportHarJson.import_entries(
-            log["entries"], page_id, status_info
+            log["entries"], status_info
         )
         if not entries:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
             return None
         else:
-            # STEP 3: Go back and fill out the rest of the "page" record based on all the resources.
             agg_stats = ImportHarJson.aggregate_stats(
-                entries, page_id, first_url, first_html_url, status_info
+                entries, first_url, first_html_url, status_info
             )
             if not agg_stats:
                 logging.warning(
@@ -190,9 +182,8 @@ class ImportHarJson(beam.DoFn):
 
         return page, entries
 
-    # TODO finish porting logic
     @staticmethod
-    def import_entries(entries, pageid, status_info):
+    def import_entries(entries, status_info):
         requests = []
         first_url = ""
         first_html_url = ""
@@ -201,7 +192,8 @@ class ImportHarJson(beam.DoFn):
             ret_request = {
                 "client": status_info["client"],
                 "date": status_info["date"],
-                "pageid": pageid,
+                "page": status_info["page"],  # TODO future improvement, not populated as of 2022-05
+                "pageid": status_info["pageid"],  # TODO deprecate in favor of newer `page` field
                 "crawlid": status_info["crawlid"],
                 # we use this below for expAge calculation
                 "startedDateTime": utils.datetime_to_epoch(
@@ -231,18 +223,18 @@ class ImportHarJson(beam.DoFn):
             ) = utils.parse_header(
                 request["headers"], constants.ghReqHeaders, cookie_key="cookie"
             )
+
+            req_headers_size = request.get("headersSize") if int(request.get("headersSize", 0)) > 0 else None
+            req_body_size = request.get("bodySize") if int(request.get("bodySize", 0)) > 0 else None
+
             ret_request.update(
                 {
                     "method": request["method"],
                     "httpVersion": request["httpVersion"],
                     "url": url,
                     "urlShort": url[:255],
-                    "reqHeadersSize": request.get("headersSize")
-                    if int(request.get("headersSize", 0)) > 0
-                    else None,
-                    "reqBodySize": request.get("bodySize")
-                    if int(request.get("bodySize", 0)) > 0
-                    else None,
+                    "reqHeadersSize": req_headers_size,
+                    "reqBodySize": req_body_size,
                     "reqOtherHeaders": request_other_headers,
                     "reqCookieLen": request_cookie_size,
                 }
@@ -251,17 +243,17 @@ class ImportHarJson(beam.DoFn):
             # RESPONSE
             response = entry["response"]
             status = response["status"]
+
+            resp_headers_size = response.get("headersSize") if int(response.get("headersSize", 0)) > 0 else None
+            resp_body_size = response.get("bodySize") if int(response.get("bodySize", 0)) > 0 else None
+
             ret_request.update(
                 {
                     "status": status,
                     "respHttpVersion": response["httpVersion"],
                     "redirectUrl": response.get("url"),
-                    "respHeadersSize": response.get("headersSize")
-                    if int(response.get("headersSize", 0)) > 0
-                    else None,
-                    "respBodySize": response.get("bodySize")
-                    if int(response.get("bodySize", 0)) > 0
-                    else None,
+                    "respHeadersSize": resp_headers_size,
+                    "respBodySize": resp_body_size,
                     "respSize": response["content"]["size"],
                 }
             )
@@ -300,7 +292,6 @@ class ImportHarJson(beam.DoFn):
             )
 
             # calculate expAge - number of seconds before resource expires
-            # CVSNO - use the new computeRequestExpAge function.
             exp_age = 0
             cc = (
                 request_headers.get("resp_cache_control")[0]
@@ -358,12 +349,7 @@ class ImportHarJson(beam.DoFn):
             first_html = False
             if not first_url:
                 if (400 <= status <= 599) or 12000 <= status:
-                    logging.error(
-                        "ERROR($gPagesTable pageid: {}): The first request ({}}) failed with status {}}.",
-                        pageid,
-                        url,
-                        status,
-                    )
+                    logging.error(f"The first request ({url}) failed with status {status}. status_info={status_info}")
                     return None
                 # This is the first URL found associated with the page - assume it's the base URL.
                 first_req = True
@@ -382,10 +368,17 @@ class ImportHarJson(beam.DoFn):
 
     @staticmethod
     def import_page(page, status_info):
+        on_load = page.get("_docTime") if page.get("_docTime") != 0 else max(page.get("_visualComplete"), page.get("_fullyLoaded"))
+        document_height = page["_document_height"] if page.get("_document_height") and int(page["_document_height"]) > 0 else 0
+        document_width = page["_document_width"] if page.get("_document_width") and int(page["_document_width"]) > 0 else 0
+        localstorage_size = page["_localstorage_size"] if page.get("_localstorage_size") and int(page["_localstorage_size"]) > 0 else 0
+        sessionstorage_size = page["_sessionstorage_size"] if page.get("_sessionstorage_size") and int(page["_sessionstorage_size"]) > 0 else 0
+
         return {
             "client": status_info["client"],
             "date": status_info["date"],
-            "pageid": status_info["pageid"],
+            "page": status_info["page"],  # TODO future improvement, not populated as of 2022-05
+            "pageid": status_info["pageid"],  # TODO deprecate in favor of newer `page` field
             "createDate": int(datetime.datetime.now().timestamp()),
             "startedDateTime": utils.datetime_to_epoch(
                 page["startedDateTime"], status_info
@@ -401,9 +394,7 @@ class ImportHarJson(beam.DoFn):
             "renderStart": page.get("_render"),
             "fullyLoaded": page.get("_fullyLoaded"),
             "visualComplete": page.get("_visualComplete"),
-            "onLoad": page.get("_docTime")
-            if page.get("_docTime") != 0
-            else max(page.get("_visualComplete"), page.get("_fullyLoaded")),
+            "onLoad": on_load,
             "gzipTotal": page.get("_gzip_total"),
             "gzipSavings": page.get("_gzip_savings"),
             "numDomElements": page.get("_domElements"),
@@ -415,19 +406,10 @@ class ImportHarJson(beam.DoFn):
             "_adult_site": page.get("_adult_site", False),
             "avg_dom_depth": page.get("_avg_dom_depth"),
             "doctype": page.get("_doctype"),
-            "document_height": page["_document_height"]
-            if page.get("_document_height") and int(page["_document_height"]) > 0
-            else 0,
-            "document_width": page["_document_width"]
-            if page.get("_document_width") and int(page["_document_width"]) > 0
-            else 0,
-            "localstorage_size": page["_localstorage_size"]
-            if page.get("_localstorage_size") and int(page["_localstorage_size"]) > 0
-            else 0,
-            "sessionstorage_size": page["_sessionstorage_size"]
-            if page.get("_sessionstorage_size")
-            and int(page["_sessionstorage_size"]) > 0
-            else 0,
+            "document_height": document_height,
+            "document_width": document_width,
+            "localstorage_size": localstorage_size,
+            "sessionstorage_size": sessionstorage_size,
             "meta_viewport": page.get("_meta_viewport"),
             "num_iframes": page.get("_num_iframes"),
             "num_scripts": page.get("_num_scripts"),
@@ -437,17 +419,12 @@ class ImportHarJson(beam.DoFn):
         }
 
     @staticmethod
-    def aggregate_stats(entries, page_id, first_url, first_html_url, status_info):
-        # CVSNO - move this error checking to the point before this function is called
+    def aggregate_stats(entries, first_url, first_html_url, status_info):
         if not first_url:
-            logging.error(
-                "ERROR($gPagesTable pageid: {}}): no first URL found.", page_id
-            )
+            logging.error(f"No first URL found. status_info={status_info}")
             return None
         if not first_html_url:
-            logging.error(
-                "ERROR($gPagesTable pageid: {}): no first HTML URL found.", page_id
-            )
+            logging.error(f"No first HTML URL found. status_info={status_info}")
             return None
 
         # initialize variables for counting the page's stats
@@ -520,11 +497,7 @@ class ImportHarJson(beam.DoFn):
                 else:
                     domains[hostname] += 1
             else:
-                logging.error(
-                    "ERROR($gPagesTable pageid: {}): No hostname found in URL: {}",
-                    page_id,
-                    url,
-                )
+                logging.error(f"No hostname found in URL: {url}. status_info={status_info}")
 
             # count expiration windows
             exp_age = entry.get("expAge")
@@ -543,7 +516,7 @@ class ImportHarJson(beam.DoFn):
                 max_age_more += 1
 
             if entry.get("firstHtml"):
-                bytes_html_doc = resp_size  # CVSNO - can we get this UNgzipped?!
+                bytes_html_doc = resp_size
 
             status = entry.get("status")
             if 300 <= status < 400 and status != 304:
