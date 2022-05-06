@@ -155,7 +155,7 @@ class ImportHarJson(beam.DoFn):
         status_info = initialize_status_info(file_name, pages[0])
 
         try:
-            page = ImportHarJson.import_page(pages[0], status_info).items()
+            page = ImportHarJson.import_page(pages[0], status_info)
         except Exception:
             logging.warning(
                 f"import_page() failed for status_info:{status_info}", exc_info=True
