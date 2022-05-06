@@ -189,11 +189,14 @@ class ImportHarJson(beam.DoFn):
         first_html_url = ""
 
         for entry in entries:
+
             ret_request = {
                 "client": status_info["client"],
                 "date": status_info["date"],
-                "page": status_info["page"],  # TODO future improvement, not populated as of 2022-05
-                "pageid": status_info["pageid"],  # TODO deprecate in favor of newer `page` field
+                # TODO future improvement, not populated as of 2022-05
+                "page": status_info["page"],
+                # TODO deprecate in favor of newer `page` field
+                "pageid": status_info["pageid"],
                 "crawlid": status_info["crawlid"],
                 # we use this below for expAge calculation
                 "startedDateTime": utils.datetime_to_epoch(
@@ -204,7 +207,6 @@ class ImportHarJson(beam.DoFn):
                 # amount response WOULD have been reduced if it had been gzipped
                 "_gzip_save": entry.get("_gzip_save"),
             }
-
             # REQUEST
             try:
                 request = entry["request"]
@@ -224,8 +226,14 @@ class ImportHarJson(beam.DoFn):
                 request["headers"], constants.ghReqHeaders, cookie_key="cookie"
             )
 
-            req_headers_size = request.get("headersSize") if int(request.get("headersSize", 0)) > 0 else None
-            req_body_size = request.get("bodySize") if int(request.get("bodySize", 0)) > 0 else None
+            req_headers_size = (
+                request.get("headersSize")
+                if int(request.get("headersSize", 0)) > 0
+                else None
+            )
+            req_body_size = (
+                request.get("bodySize") if int(request.get("bodySize", 0)) > 0 else None
+            )
 
             ret_request.update(
                 {
@@ -244,8 +252,16 @@ class ImportHarJson(beam.DoFn):
             response = entry["response"]
             status = response["status"]
 
-            resp_headers_size = response.get("headersSize") if int(response.get("headersSize", 0)) > 0 else None
-            resp_body_size = response.get("bodySize") if int(response.get("bodySize", 0)) > 0 else None
+            resp_headers_size = (
+                response.get("headersSize")
+                if int(response.get("headersSize", 0)) > 0
+                else None
+            )
+            resp_body_size = (
+                response.get("bodySize")
+                if int(response.get("bodySize", 0)) > 0
+                else None
+            )
 
             ret_request.update(
                 {
@@ -349,7 +365,9 @@ class ImportHarJson(beam.DoFn):
             first_html = False
             if not first_url:
                 if (400 <= status <= 599) or 12000 <= status:
-                    logging.error(f"The first request ({url}) failed with status {status}. status_info={status_info}")
+                    logging.error(
+                        f"The first request ({url}) failed with status {status}. status_info={status_info}"
+                    )
                     return None
                 # This is the first URL found associated with the page - assume it's the base URL.
                 first_req = True
@@ -368,17 +386,42 @@ class ImportHarJson(beam.DoFn):
 
     @staticmethod
     def import_page(page, status_info):
-        on_load = page.get("_docTime") if page.get("_docTime") != 0 else max(page.get("_visualComplete"), page.get("_fullyLoaded"))
-        document_height = page["_document_height"] if page.get("_document_height") and int(page["_document_height"]) > 0 else 0
-        document_width = page["_document_width"] if page.get("_document_width") and int(page["_document_width"]) > 0 else 0
-        localstorage_size = page["_localstorage_size"] if page.get("_localstorage_size") and int(page["_localstorage_size"]) > 0 else 0
-        sessionstorage_size = page["_sessionstorage_size"] if page.get("_sessionstorage_size") and int(page["_sessionstorage_size"]) > 0 else 0
+        on_load = (
+            page.get("_docTime")
+            if page.get("_docTime") != 0
+            else max(page.get("_visualComplete"), page.get("_fullyLoaded"))
+        )
+        document_height = (
+            page["_document_height"]
+            if page.get("_document_height") and int(page["_document_height"]) > 0
+            else 0
+        )
+        document_width = (
+            page["_document_width"]
+            if page.get("_document_width") and int(page["_document_width"]) > 0
+            else 0
+        )
+        localstorage_size = (
+            page["_localstorage_size"]
+            if page.get("_localstorage_size") and int(page["_localstorage_size"]) > 0
+            else 0
+        )
+        sessionstorage_size = (
+            page["_sessionstorage_size"]
+            if page.get("_sessionstorage_size")
+            and int(page["_sessionstorage_size"]) > 0
+            else 0
+        )
 
         return {
             "client": status_info["client"],
             "date": status_info["date"],
-            "page": status_info["page"],  # TODO future improvement, not populated as of 2022-05
-            "pageid": status_info["pageid"],  # TODO deprecate in favor of newer `page` field
+            "page": status_info[
+                "page"
+            ],  # TODO future improvement, not populated as of 2022-05
+            "pageid": status_info[
+                "pageid"
+            ],  # TODO deprecate in favor of newer `page` field
             "createDate": int(datetime.datetime.now().timestamp()),
             "startedDateTime": utils.datetime_to_epoch(
                 page["startedDateTime"], status_info
@@ -497,7 +540,9 @@ class ImportHarJson(beam.DoFn):
                 else:
                     domains[hostname] += 1
             else:
-                logging.error(f"No hostname found in URL: {url}. status_info={status_info}")
+                logging.error(
+                    f"No hostname found in URL: {url}. status_info={status_info}"
+                )
 
             # count expiration windows
             exp_age = entry.get("expAge")
