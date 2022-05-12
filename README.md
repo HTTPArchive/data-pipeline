@@ -21,7 +21,7 @@ BUCKET=gs://httparchive
 # topic is used to monitor file creation events in Google Cloud Storge
 
 gcloud pubsub topics create $TOPIC
-gcloud pubsub subscriptions create $SUBSCRIPTION --topic=$TOPIC
+gcloud pubsub subscriptions create $SUBSCRIPTION --topic=$TOPIC --expiration-period=never
 gsutil notification create \
     -f json \
     -e OBJECT_FINALIZE \

@@ -350,5 +350,9 @@
   {
     "name": "usertiming",
     "type": "INTEGER"
+  },
+  {
+    "name": "metadata",
+    "type": "STRING"
   }
 ]

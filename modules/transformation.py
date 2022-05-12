@@ -109,12 +109,8 @@ def initialize_status_info(file_name, page):
         "crawlid": metadata.get("crawlid", 0),
         "wptid": page.get("testID", base_name.split(".")[0]),
         "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
-        "page": metadata.get(
-            "page", None  # TODO future improvement, not populated as of 2022-05
-        ),
-        "pageid": metadata.get(
-            "pageid", None  # TODO deprecate in favor of newer `page` field
-        ),
+        "page": metadata.get("tested_url", ""),
+        "pageid": int(metadata["pageid"]) if metadata.get("pageid") else None,
         "rank": int(metadata["rank"]) if metadata.get("rank") else None,
         "date": "{:%Y_%m_%d}".format(date),
         "client": metadata.get("layout", utils.client_name(file_name)).lower(),
@@ -414,6 +410,7 @@ class ImportHarJson(beam.DoFn):
         )
 
         return {
+            "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
             "client": status_info["client"],
             "date": status_info["date"],
             "page": status_info[
@@ -429,10 +426,9 @@ class ImportHarJson(beam.DoFn):
             "archive": status_info["archive"],
             "label": status_info["label"],
             "crawlid": status_info["crawlid"],
-            # TODO confirm - it's ok to get url from page info rather than status info as originally implemented?
-            "url": page["_URL"],
-            "urlhash": utils.get_url_hash(page["_URL"]),
-            "urlShort": page["_URL"][:255],
+            "url": status_info["page"],
+            "urlhash": utils.get_url_hash(status_info["page"]),
+            "urlShort": status_info["page"][:255],
             "TTFB": page.get("_TTFB"),
             "renderStart": page.get("_render"),
             "fullyLoaded": page.get("_fullyLoaded"),

@@ -1,3 +1,4 @@
+import datetime
 from unittest import TestCase
 
 from modules import utils
@@ -6,6 +7,9 @@ from modules import utils
 class Test(TestCase):
     def test_get_url_hash(self):
         self.assertEqual(utils.get_url_hash("https://google.com/"), 63524)
+
+    def test_get_url_hash_empty_string(self):
+        self.assertEqual(utils.get_url_hash(""), 54301)
 
     def test_get_ext_question(self):
         self.assertEqual(utils.get_ext("http://test.com/foo.bar?baz"), "bar")
@@ -117,3 +121,7 @@ class Test(TestCase):
 
     def test_datetime_to_epoch_empty(self):
         self.assertIsNone(utils.datetime_to_epoch("not-a-date", {"foo": "bar"}))
+
+    def test_crawl_date(self):
+        dir_name = "gs://httparchive/crawls/android-Apr_1_2022"
+        self.assertEqual(utils.crawl_date(dir_name), datetime.datetime(2022, 4, 1, 0, 0))
