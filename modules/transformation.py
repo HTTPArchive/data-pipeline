@@ -189,9 +189,6 @@ class ImportHarJson(beam.DoFn):
             ret_request = {
                 "client": status_info["client"],
                 "date": status_info["date"],
-                # TODO future improvement, not populated as of 2022-05
-                "page": status_info["page"],
-                # TODO deprecate in favor of newer `page` field
                 "pageid": status_info["pageid"],
                 "crawlid": status_info["crawlid"],
                 # we use this below for expAge calculation
@@ -413,12 +410,7 @@ class ImportHarJson(beam.DoFn):
             "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
             "client": status_info["client"],
             "date": status_info["date"],
-            "page": status_info[
-                "page"
-            ],  # TODO future improvement, not populated as of 2022-05
-            "pageid": status_info[
-                "pageid"
-            ],  # TODO deprecate in favor of newer `page` field
+            "pageid": status_info["pageid"],
             "createDate": int(datetime.datetime.now().timestamp()),
             "startedDateTime": utils.datetime_to_epoch(
                 page["startedDateTime"], status_info
