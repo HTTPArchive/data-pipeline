@@ -127,7 +127,8 @@ disable=print-statement,
         next-method-defined,
         dict-items-not-iterating,
         dict-keys-not-iterating,
-        dict-values-not-iterating
+        dict-values-not-iterating,
+        logging-too-many-args
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -243,17 +244,13 @@ ignored-classes=optparse.Values,thread._local,_thread._local
 # (useful for modules/projects where namespaces are manipulated during runtime
 # and thus existing member attributes cannot be deduced by static analysis. It
 # supports qualified module names, as well as Unix pattern matching.
-ignored-modules=flask,
-                flask_talisman,
-                matplotlib,
-                matplotlib.pyplot,
-                mistune,
-                pandas,
-                scour,
-                werkzeug.exceptions,
-                werkzeug.routing,
-                werkzeug.http,
-                pytest
+ignored-modules=apache_beam,
+                apache_beam.io,
+                apache_beam.io.fileio,
+                apache_beam.options.pipeline_options,
+                dateutil,
+                modules,
+                modules.transformation
 
 # Show a hint with possible names when a member name was not found. The aspect
 # of finding the hint is based on edit distance.

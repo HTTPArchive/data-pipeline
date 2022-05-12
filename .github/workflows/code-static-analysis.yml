@@ -6,12 +6,10 @@ on:
   push:
     branches: [main]
     paths:
-      - '**.js'
       - '**.py'
   pull_request:
     branches: [main]
     paths:
-      - '**.js'
       - '**.py'
   schedule:
     #        ┌───────────── minute (0 - 59)
@@ -32,7 +30,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        language: ['javascript', 'python']
+        language: ['python']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
