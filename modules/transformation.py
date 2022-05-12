@@ -110,7 +110,7 @@ def initialize_status_info(file_name, page):
         "wptid": page.get("testID", base_name.split(".")[0]),
         "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
         "page": metadata.get("tested_url", ""),
-        "pageid": int(metadata["pageid"]) if metadata.get("pageid") else None,
+        "pageid": int(metadata["page_id"]) if metadata.get("page_id") else None,
         "rank": int(metadata["rank"]) if metadata.get("rank") else None,
         "date": "{:%Y_%m_%d}".format(date),
         "client": metadata.get("layout", utils.client_name(file_name)).lower(),
