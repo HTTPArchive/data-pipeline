@@ -312,7 +312,7 @@ class ImportHarJson(beam.DoFn):
                 exp_age = 0
             elif cc and re.match(r"max-age=\d+", cc):
                 try:
-                    exp_age = int(re.findall(r"\d+", cc)[0])
+                    exp_age = utils.clamp_integer(re.findall(r"\d+", cc)[0])
                 except Exception:
                     # TODO compare results from old and new pipeline for these errors
                     logging.warning(f"Unable to parse max-age, cc:{cc}", exc_info=True)
