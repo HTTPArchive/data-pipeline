@@ -7,7 +7,7 @@ import dateutil.parser
 from modules import constants
 
 
-MAX_INT = 2**63-1
+BIGQUERY_MAX_INT = 2**63-1
 
 
 def remove_empty_keys(d):
@@ -177,4 +177,4 @@ def crawl_date(dir_name):
 
 
 def clamp_integer(n):
-    return min(MAX_INT, int(n))
+    return min(BIGQUERY_MAX_INT, int(n))

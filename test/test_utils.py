@@ -136,4 +136,4 @@ class Test(TestCase):
         self.assertEqual(utils.clamp_integer('1000'), 1000)
 
     def test_clamp_integer_bigint(self):
-        self.assertEqual(utils.clamp_integer(2**64), utils.MAX_INT)
+        self.assertEqual(utils.clamp_integer(2**64), utils.BIGQUERY_MAX_INT)
