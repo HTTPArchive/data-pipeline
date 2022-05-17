@@ -352,6 +352,9 @@ class ImportHarJson(beam.DoFn):
             # NOW add all the headers from both the request and response.
             ret_request.update({k: ", ".join(v) for k, v in request_headers.items()})
 
+            # TODO implement custom rules?
+            # https://github.com/HTTPArchive/legacy.httparchive.org/blob/de08e0c7c94a7da529826f0a4429a9d28b8fdf5e/bulktest/batch_lib.inc#L658-L664
+
             # TODO consider doing this sooner? why process if status is bad?
             # wrap it up
             first_req = False
@@ -361,7 +364,7 @@ class ImportHarJson(beam.DoFn):
                     logging.error(
                         f"The first request ({url}) failed with status {status}. status_info={status_info}"
                     )
-                    return None
+                    return None, None, None
                 # This is the first URL found associated with the page - assume it's the base URL.
                 first_req = True
                 first_url = url
