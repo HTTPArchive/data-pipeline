@@ -110,8 +110,8 @@ def initialize_status_info(file_name, page):
         "wptid": page.get("testID", base_name.split(".")[0]),
         "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
         "page": metadata.get("tested_url", ""),
-        "pageid": int(metadata["page_id"]) if metadata.get("page_id") else None,
-        "rank": int(metadata["rank"]) if metadata.get("rank") else None,
+        "pageid": utils.clamp_integer(metadata["page_id"]) if metadata.get("page_id") else None,
+        "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
         "date": "{:%Y_%m_%d}".format(date),
         "client": metadata.get("layout", utils.client_name(file_name)).lower(),
     }
@@ -312,7 +312,7 @@ class ImportHarJson(beam.DoFn):
                 exp_age = 0
             elif cc and re.match(r"max-age=\d+", cc):
                 try:
-                    exp_age = int(re.findall(r"\d+", cc)[0])
+                    exp_age = utils.clamp_integer(re.findall(r"\d+", cc)[0])
                 except Exception:
                     # TODO compare results from old and new pipeline for these errors
                     logging.warning(f"Unable to parse max-age, cc:{cc}", exc_info=True)
@@ -411,7 +411,7 @@ class ImportHarJson(beam.DoFn):
             "client": status_info["client"],
             "date": status_info["date"],
             "pageid": status_info["pageid"],
-            "createDate": int(datetime.datetime.now().timestamp()),
+            "createDate": utils.clamp_integer(datetime.datetime.now().timestamp()),
             "startedDateTime": utils.datetime_to_epoch(
                 page["startedDateTime"], status_info
             ),
@@ -574,11 +574,11 @@ class ImportHarJson(beam.DoFn):
 
         ret = {
             "reqTotal": req_total,
-            "bytesTotal": bytes_total,
+            "bytesTotal": utils.clamp_integer(bytes_total),
             "reqJS": count["script"],
-            "bytesJS": size["script"],
+            "bytesJS": utils.clamp_integer(size["script"]),
             "reqImg": count["image"],
-            "bytesImg": size["image"],
+            "bytesImg": utils.clamp_integer(size["image"]),
             "reqJson": 0,
             "bytesJson": 0,
         }
@@ -586,7 +586,7 @@ class ImportHarJson(beam.DoFn):
             ret.update(
                 {
                     "req{}".format(typ.title()): count[typ],
-                    "bytes{}".format(typ.title()): size[typ],
+                    "bytes{}".format(typ.title()): utils.clamp_integer(size[typ]),
                 }
             )
 
@@ -599,7 +599,7 @@ class ImportHarJson(beam.DoFn):
                 "maxage30": max_age_30,
                 "maxage365": max_age_365,
                 "maxageMore": max_age_more,
-                "bytesHtmlDoc": bytes_html_doc,
+                "bytesHtmlDoc": utils.clamp_integer(bytes_html_doc),
                 "numRedirects": num_redirects,
                 "numErrors": num_errors,
                 "numGlibs": num_glibs,

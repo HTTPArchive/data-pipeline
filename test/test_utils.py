@@ -125,3 +125,15 @@ class Test(TestCase):
     def test_crawl_date(self):
         dir_name = "gs://httparchive/crawls/android-Apr_1_2022"
         self.assertEqual(utils.crawl_date(dir_name), datetime.datetime(2022, 4, 1, 0, 0))
+
+    def test_clamp_integer_normal(self):
+        self.assertEqual(utils.clamp_integer(1000), 1000)
+
+    def test_clamp_integer_negative(self):
+        self.assertEqual(utils.clamp_integer(-1000), -1000)
+
+    def test_clamp_integer_str(self):
+        self.assertEqual(utils.clamp_integer('1000'), 1000)
+
+    def test_clamp_integer_bigint(self):
+        self.assertEqual(utils.clamp_integer(2**64), utils.BIGQUERY_MAX_INT)
