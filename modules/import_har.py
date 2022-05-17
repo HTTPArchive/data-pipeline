@@ -1,6 +1,8 @@
 import argparse
+import logging
 
 import apache_beam as beam
+from apache_beam.io.gcp.bigquery import BigQueryWriteFn
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 
 from modules import constants, utils
@@ -44,26 +46,26 @@ def run(argv=None):
             lambda elements: elements
         )
 
-        _ = pages | "WritePagesToBigQuery" >> WriteBigQuery(
+        pages_errors = pages | "WritePagesToBigQuery" >> WriteBigQuery(
             table=lambda row: utils.format_table_name(row, "pages"),
             schema=constants.bigquery["schemas"]["pages"],
             streaming=standard_options.streaming,
         )
 
-        _ = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
+        requests_errors = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
             table=lambda row: utils.format_table_name(row, "requests"),
             schema=constants.bigquery["schemas"]["requests"],
             streaming=standard_options.streaming,
         )
 
-        # TODO deadletter queue
-        #  FAILED_ROWS not implemented for BigQueryBatchFileLoads in this version of beam (only _StreamToBigQuery)
-        # (pages_result[BigQueryWriteFn.FAILED_ROWS]
-        #  | 'PrintPagesErrors' >> beam.FlatMap(lambda e: logging.error(f'Could not load page to BigQuery: {e}')))
-        #
-        # (requests_result[BigQueryWriteFn.FAILED_ROWS]
-        #  | 'PrintRequestsErrors' >> beam.FlatMap(lambda e: logging.error(f'Could not load request to BigQuery: {e}')))
+        # deadletter logging
+        (pages_errors[BigQueryWriteFn.FAILED_ROWS]
+         | 'PrintPagesErrors' >> beam.FlatMap(lambda e: logging.error(f'Could not load page to BigQuery: {e}')))
+        (requests_errors[BigQueryWriteFn.FAILED_ROWS]
+         | 'PrintRequestsErrors' >> beam.FlatMap(lambda e: logging.error(f'Could not load request to BigQuery: {e}')))
 
+        # TODO implement deadletter for FILE_LOADS?
+        #  FAILED_ROWS not implemented for BigQueryBatchFileLoads in this version of beam (only _StreamToBigQuery)
         # pages_result[BigQueryBatchFileLoads.DESTINATION_JOBID_PAIRS] | beam.Map(lambda e: print(f"jobidpair: {e}"))
         # pages_result[BigQueryBatchFileLoads.DESTINATION_FILE_PAIRS] | beam.Map(lambda e: print(f"files: {e}"))
         # pages_result[BigQueryBatchFileLoads.DESTINATION_COPY_JOBID_PAIRS] | beam.Map(lambda e: print(f"copies: {e}"))
