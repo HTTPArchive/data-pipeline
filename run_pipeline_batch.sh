@@ -1,11 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
 python3 run_pipeline.py \
-#  --input=gs://httparchive/chrome-Jan_1_2022 \
-  --input=gs://httparchive/experimental/input/** \
-#  --input=gs://httparchive/crawls/** \
-#  --subscription=projects/httparchive/subscriptions/har-gcs-sub \
-#  --streaming \
+  --input=gs://httparchive/crawls/*Jan_1_2022 \
   --runner=DataflowRunner \
   --project=httparchive \
 #  --temp_location=gs://httparchive-staging/dataflow/temp \
