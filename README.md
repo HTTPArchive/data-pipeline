@@ -45,38 +45,15 @@ while IFS= read -r f; do gcloud pubsub topics publish projects/httparchive/topic
 ```
 
 ## Run the pipeline
-### Read from GCS (batch or streaming)
-
-Include `--streaming` to read from GCS with a streaming job.
-
+### Run from Pub/Sub (streaming)
 ```shell
-python run_pipeline.py \
---input=gs://httparchive/crawls/** \
---temp_location=gs://httparchive-staging/experimental/temp \
---staging_location=gs://httparchive-staging/experimental \
---setup_file=./setup.py \
---runner=DataflowRunner \
---project=httparchive \
---region=us-west1 \
---machine_type=n1-standard-32 \
---worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd
+./run_pipeline_streaming.sh
 ```
 
-### Run from Pub/Sub
+### WIP Read from GCS (batch)
+
 ```shell
-python run_pipeline.py \
---subscription=projects/httparchive/subscriptions/har-gcs-sub \
---streaming \
---enable_streaming_engine \
---experiments=use_runner_v2 \
---temp_location=gs://httparchive-staging/experimental/temp \
---staging_location=gs://httparchive-staging/experimental \
---setup_file=./setup.py \
---runner=DataflowRunner \
---project=httparchive \
---region=us-west1 \
---machine_type=n1-standard-32 \
---worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd
+./run_pipeline_batch.sh
 ```
 
 ## Inputs
