@@ -59,20 +59,21 @@ def run(argv=None):
         )
 
         # deadletter logging
-        (
-            pages_errors[BigQueryWriteFn.FAILED_ROWS]
-            | "PrintPagesErrors"
-            >> beam.FlatMap(
-                lambda e: logging.error(f"Could not load page to BigQuery: {e}")
+        if standard_options.streaming:
+            (
+                pages_errors[BigQueryWriteFn.FAILED_ROWS]
+                | "PrintPagesErrors"
+                >> beam.FlatMap(
+                    lambda e: logging.error(f"Could not load page to BigQuery: {e}")
+                )
             )
-        )
-        (
-            requests_errors[BigQueryWriteFn.FAILED_ROWS]
-            | "PrintRequestsErrors"
-            >> beam.FlatMap(
-                lambda e: logging.error(f"Could not load request to BigQuery: {e}")
+            (
+                requests_errors[BigQueryWriteFn.FAILED_ROWS]
+                | "PrintRequestsErrors"
+                >> beam.FlatMap(
+                    lambda e: logging.error(f"Could not load request to BigQuery: {e}")
+                )
             )
-        )
 
         # TODO implement deadletter for FILE_LOADS?
         #  FAILED_ROWS not implemented for BigQueryBatchFileLoads in this version of beam (only _StreamToBigQuery)
