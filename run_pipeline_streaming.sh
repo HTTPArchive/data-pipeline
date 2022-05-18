@@ -14,7 +14,7 @@ fi
 
 
 python3 run_pipeline.py \
-  ${update_args} \
+  "${update_args}" \
   --subscription=projects/httparchive/subscriptions/har-gcs-pipeline \
   --streaming \
   --save_main_session \
