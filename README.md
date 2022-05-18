@@ -56,6 +56,17 @@ while IFS= read -r f; do gcloud pubsub topics publish projects/httparchive/topic
 ./run_pipeline_batch.sh
 ```
 
+## Update the pipeline
+### Update streaming
+Supply the run script with a currently running job name
+
+> ⚠ Read the documentation carefully to understand the potential effects and limitations before updating in-place
+> https://cloud.google.com/dataflow/docs/guides/updating-a-pipeline
+
+```shell
+./run_pipeline_streaming.sh beam-app-abc-123-456-def
+```
+
 ## Inputs
 
 This pipeline can read inputs from two sources
