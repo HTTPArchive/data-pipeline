@@ -523,7 +523,7 @@ class ImportHarJson(beam.DoFn):
                     size[frmt] += resp_size
 
             # count unique domains (really hostnames)
-            matches = re.findall(r"(?:ws|http[s]?)://([^/]*)", url)
+            matches = re.findall(r"(?:ws|http)[s]?://([^/]*)", url)
             if url and matches:
                 hostname = matches[0]
                 if hostname not in domains:
