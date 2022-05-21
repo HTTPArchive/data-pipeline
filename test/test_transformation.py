@@ -10,7 +10,7 @@ class TestImportHarJson(TestCase):
             self.assertEqual(len(log.output), 1)
             self.assertEqual(len(log.records), 1)
             self.assertIn("HAR file read error", log.output[0])
-            self.assertIsNone(ret)
+            self.assertEqual(ret, (None, None))
 
     def test_generate_pages_decode_warning(self):
         with self.assertLogs(level="WARNING") as log:
