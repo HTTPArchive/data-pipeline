@@ -17,7 +17,7 @@ class TestImportHarJson(TestCase):
             ret = ImportHarJson.generate_pages("foo", "garbage")
             self.assertEqual(len(log.output), 1)
             self.assertEqual(len(log.records), 1)
-            self.assertIsNone(ret)
+            self.assertEqual(ret, (None, None))
 
     def test_generate_pages_empty_error(self):
         with self.assertLogs(level="WARNING") as log:
@@ -25,7 +25,7 @@ class TestImportHarJson(TestCase):
             self.assertEqual(len(log.output), 1)
             self.assertEqual(len(log.records), 1)
             self.assertIn("No pages found", log.output[0])
-            self.assertIsNone(ret)
+            self.assertEqual(ret, (None, None))
 
     def test_import_page_empty_status_info(self):
         with self.assertRaises(Exception):
