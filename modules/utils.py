@@ -177,4 +177,6 @@ def crawl_date(dir_name):
 
 
 def clamp_integer(n):
+    if int(n) < 0:
+        return None
     return min(BIGQUERY_MAX_INT, int(n))

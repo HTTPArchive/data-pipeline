@@ -130,7 +130,7 @@ class Test(TestCase):
         self.assertEqual(utils.clamp_integer(1000), 1000)
 
     def test_clamp_integer_negative(self):
-        self.assertEqual(utils.clamp_integer(-1000), -1000)
+        self.assertEqual(utils.clamp_integer(-1000), None)
 
     def test_clamp_integer_str(self):
         self.assertEqual(utils.clamp_integer('1000'), 1000)
