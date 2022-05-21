@@ -155,10 +155,14 @@ def client_name(file_name):
 
 
 def format_table_name(row, table):
-    return "{}.{}_{}".format(
+    table_name = "{}.{}_{}".format(
         constants.bigquery["datasets"][table], row["date"], row["client"]
     )
 
+    if not table_name:
+        logging.error(f"Unable to determine full table name. table={table},row={row}")
+
+    return table_name
 
 def datetime_to_epoch(dt, status_info):
     try:
