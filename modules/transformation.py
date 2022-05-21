@@ -134,19 +134,19 @@ class ImportHarJson(beam.DoFn):
     def generate_pages(file_name, element):
         if not element:
             logging.warning("HAR file read error.")
-            return None
+            return None, None
 
         try:
             har = json.loads(element)
         except JSONDecodeError:
             logging.warning(f"JSON decode failed for: {file_name}")
-            return None
+            return None, None
 
         log = har["log"]
         pages = log["pages"]
         if len(pages) == 0:
             logging.warning(f"No pages found for: {file_name}")
-            return None
+            return None, None
 
         status_info = initialize_status_info(file_name, pages[0])
 
@@ -156,14 +156,14 @@ class ImportHarJson(beam.DoFn):
             logging.warning(
                 f"import_page() failed for status_info:{status_info}", exc_info=True
             )
-            return None
+            return None, None
 
         entries, first_url, first_html_url = ImportHarJson.import_entries(
             log["entries"], status_info
         )
         if not entries:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
-            return None
+            return None, None
         else:
             agg_stats = ImportHarJson.aggregate_stats(
                 entries, first_url, first_html_url, status_info
@@ -172,7 +172,7 @@ class ImportHarJson(beam.DoFn):
                 logging.warning(
                     f"aggregate_stats() failed for status_info:{status_info}"
                 )
-                return None
+                return None, None
             else:
                 page.update(agg_stats)
 
