@@ -122,8 +122,10 @@ class ImportHarJson(beam.DoFn):
         file_name, data = element
         try:
             page, requests = self.generate_pages(file_name, data)
-            yield beam.pvalue.TaggedOutput("page", page)
-            yield beam.pvalue.TaggedOutput("requests", requests)
+            if page:
+                yield beam.pvalue.TaggedOutput("page", page)
+            if requests:
+                yield beam.pvalue.TaggedOutput("requests", requests)
         except Exception:
             logging.exception(
                 f"Unable to unpack HAR, check previous logs for detailed errors. "
