@@ -164,6 +164,7 @@ def format_table_name(row, table):
 
     return table_name
 
+
 def datetime_to_epoch(dt, status_info):
     try:
         return int(round(dateutil.parser.parse(dt).timestamp()))
