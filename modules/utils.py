@@ -37,17 +37,17 @@ def get_ext(ext):
     return ret_ext
 
 
-def pretty_type(mime_typ, ext):
-    mime_typ = mime_typ.lower()
+def pretty_type(mime_type, ext):
+    mime_type = mime_type.lower()
 
     # Order by most unique first.
     # Do NOT do html because "text/html" is often misused for other types. We catch it below.
-    for typ in ["font", "css", "image", "script", "video", "audio", "xml"]:
-        if typ in mime_typ:
-            return typ
+    for type in ["font", "css", "image", "script", "video", "audio", "xml"]:
+        if type in mime_type:
+            return type
 
     # Special cases I found by manually searching.
-    if "json" in mime_typ or ext in ["js", "json"]:
+    if "json" in mime_type or ext in ["js", "json"]:
         return "script"
     elif ext in ["eot", "ttf", "woff", "woff2", "otf"]:
         return "font"
@@ -71,23 +71,23 @@ def pretty_type(mime_typ, ext):
         return "xml"
     # Video extensions mp4, webm, ts, m4v, m4s, m4v, mov, ogv
     elif next(
-        (typ for typ in ["flash", "webm", "mp4", "flv"] if typ in mime_typ), None
+        (type for type in ["flash", "webm", "mp4", "flv"] if type in mime_type), None
     ) or ext in ["mp4", "webm", "ts", "m4v", "m4s", "mov", "ogv", "swf", "f4v", "flv"]:
         return "video"
-    elif "html" in mime_typ or ext in ["html", "htm"]:
+    elif "html" in mime_type or ext in ["html", "htm"]:
         # Here is where we catch "text/html" mime type.
         return "html"
-    elif "text" in mime_typ:
+    elif "text" in mime_type:
         # Put "text" LAST because it's often misused so $ext should take precedence.
         return "text"
     else:
         return "other"
 
 
-def get_format(pretty_typ, mime_typ, ext):
-    if "image" == pretty_typ:
+def get_format(pretty_type, mime_type, ext):
+    if "image" == pretty_type:
         # Order by most popular first.
-        for typ in [
+        for type in [
             "jpg",
             "png",
             "gif",
@@ -99,15 +99,15 @@ def get_format(pretty_typ, mime_typ, ext):
             "heic",
             "heif",
         ]:
-            if typ in mime_typ or typ == ext:
-                return typ
-        if "jpeg" in mime_typ:
+            if type in mime_type or type == ext:
+                return type
+        if "jpeg" in mime_type:
             return "jpg"
-    if "video" == pretty_typ:
+    if "video" == pretty_type:
         # Order by most popular first.
-        for typ in ["flash", "swf", "mp4", "flv", "f4v"]:
-            if typ in mime_typ or typ == ext:
-                return typ
+        for type in ["flash", "swf", "mp4", "flv", "f4v"]:
+            if type in mime_type or type == ext:
+                return type
     return ""
 
 

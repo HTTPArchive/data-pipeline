@@ -273,14 +273,14 @@ class ImportHarJson(beam.DoFn):
             #  consider using mimetypes library instead https://docs.python.org/3/library/mimetypes.html
             mime_type = response["content"]["mimeType"]
             ext = utils.get_ext(url)
-            typ = utils.pretty_type(mime_type, ext)
-            frmt = utils.get_format(typ, mime_type, ext)
+            type = utils.pretty_type(mime_type, ext)
+            frmt = utils.get_format(type, mime_type, ext)
 
             ret_request.update(
                 {
                     "mimeType": mime_type.lower(),
                     "ext": ext.lower(),
-                    "type": typ.lower(),
+                    "type": type.lower(),
                     "format": frmt.lower(),
                 }
             )
@@ -470,7 +470,7 @@ class ImportHarJson(beam.DoFn):
         count = {}
 
         # This is a list of all mime types AND file formats that we care about.
-        typs = [
+        types = [
             "css",
             "image",
             "script",
@@ -480,6 +480,7 @@ class ImportHarJson(beam.DoFn):
             "audio",
             "video",
             "text",
+            "json",
             "xml",
             "gif",
             "jpg",
@@ -487,6 +488,10 @@ class ImportHarJson(beam.DoFn):
             "webp",
             "svg",
             "ico",
+            "avif",
+            "jxl",
+            "heic",
+            "heif",
             "flash",
             "swf",
             "mp4",
@@ -494,9 +499,9 @@ class ImportHarJson(beam.DoFn):
             "f4v",
         ]
         # initialize the hashes
-        for typ in typs:
-            size[typ] = 0
-            count[typ] = 0
+        for type in types:
+            size[type] = 0
+            count[type] = 0
         domains = {}
         maxage_null = (
             max_age_0
@@ -516,7 +521,7 @@ class ImportHarJson(beam.DoFn):
 
             frmt = entry.get("format")
             if frmt and pretty_type in ["image", "video"]:
-                if frmt not in typs:
+                if frmt not in types:
                     logging.warning(
                         f"Unexpected type, found format:{frmt}, status_info:{status_info}"
                     )
@@ -587,11 +592,11 @@ class ImportHarJson(beam.DoFn):
             "reqJson": 0,
             "bytesJson": 0,
         }
-        for typ in typs:
+        for type in types:
             ret.update(
                 {
-                    "req{}".format(typ.title()): count[typ],
-                    "bytes{}".format(typ.title()): utils.clamp_integer(size[typ]),
+                    "req{}".format(type.title()): count[type],
+                    "bytes{}".format(type.title()): utils.clamp_integer(size[type]),
                 }
             )
 
