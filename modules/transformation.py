@@ -178,9 +178,9 @@ class ImportHarJson(beam.DoFn):
             else:
                 page.update(agg_stats)
 
-        utils.clamp_integers(page, utils.columns_for_schema('pages'))
+        utils.clamp_integers(page, utils.int_columns_for_schema('pages'))
         for entry in entries:
-            utils.clamp_integers(entry, utils.columns_for_schema('requests'))
+            utils.clamp_integers(entry, utils.int_columns_for_schema('requests'))
 
         return page, entries
 

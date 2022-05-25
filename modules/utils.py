@@ -197,6 +197,6 @@ def clamp_integers(data, columns):
         logging.warning(f"Clamping required for {violations}. data={data}")
 
 
-def columns_for_schema(schema_name):
+def int_columns_for_schema(schema_name):
     schema = constants.bigquery['schemas'][schema_name]['fields']
     return [field['name'] for field in schema if field['type'] == 'INTEGER']
