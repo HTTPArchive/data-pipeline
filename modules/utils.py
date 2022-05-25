@@ -6,8 +6,7 @@ import dateutil.parser
 
 from modules import constants
 
-
-BIGQUERY_MAX_INT = 2**63-1
+BIGQUERY_MAX_INT = 2 ** 63 - 1
 
 
 def remove_empty_keys(d):
@@ -185,3 +184,19 @@ def clamp_integer(n):
     if int(n) < 0:
         return None
     return min(BIGQUERY_MAX_INT, int(n))
+
+
+# given a list of integer columns, clamp data to utils.BIGQUERY_MAX_INT and log violations
+def clamp_integers(data, columns):
+    violations = {}
+    for k, v in data.items():
+        if k in columns and v and int(v) > BIGQUERY_MAX_INT:
+            violations[k] = v
+            data[k] = clamp_integer(v)
+    if violations:
+        logging.warning(f"Clamping required for {violations}. data={data}")
+
+
+def columns_for_schema(schema_name):
+    schema = constants.bigquery['schemas'][schema_name]['fields']
+    return [field['name'] for field in schema if field['type'] == 'INTEGER']
