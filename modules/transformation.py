@@ -415,7 +415,11 @@ class ImportHarJson(beam.DoFn):
             else 0
         )
 
-        avg_dom_depth = int(float(page.get("_avg_dom_depth", 0)))
+        avg_dom_depth = (
+            int(float(page.get("_avg_dom_depth")))
+            if page.get("_avg_dom_depth")
+            else 0
+        )
 
         return {
             "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
