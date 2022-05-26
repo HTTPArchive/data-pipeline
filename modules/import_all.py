@@ -10,8 +10,10 @@ import logging
 import re
 
 import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.options.pipeline_options import SetupOptions
+from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
+from apache_beam.runners import DataflowRunner
+
+from modules import constants
 
 
 # BigQuery can handle rows up to 100 MB.
@@ -85,13 +87,14 @@ def get_custom_metrics(page):
     custom_metrics = {}
 
     for metric in page.get('_custom'):
-        value = page.get(metric)
+        value = page.get(f'_{metric}')
 
         if isinstance(value, str):
             try:
                 value = json.loads(value)
             except ValueError:
-                pass
+                logging.warning('Unable to parse custom metric %s as JSON', metric)
+                continue
 
         custom_metrics[metric] = value
 
@@ -112,29 +115,32 @@ def get_features(page):
     def get_feature_names(feature_map, feature_type):
         feature_names = []
 
-        for (key, value) in feature_map:
-            if value.get('name'):
-                feature_names.append({
-                    'feature': value.get('name'),
-                    'type': feature_type,
-                    'id': key
-                })
-                continue
+        try:
+            for (key, value) in feature_map.items():
+                if value.get('name'):
+                    feature_names.append({
+                        'feature': value.get('name'),
+                        'type': feature_type,
+                        'id': key
+                    })
+                    continue
 
-            match = id_pattern.match(key)
-            if match:
-                feature_names.append({
-                    'feature': '',
-                    'type': feature_type,
-                    'id': match.group(1)
-                })
-                continue
+                match = id_pattern.match(key)
+                if match:
+                    feature_names.append({
+                        'feature': '',
+                        'type': feature_type,
+                        'id': match.group(1)
+                    })
+                    continue
 
-            feature_names.append({
-                'feature': key,
-                'type': feature_type,
-                'id': ''
-            })
+                feature_names.append({
+                    'feature': key,
+                    'type': feature_type,
+                    'id': ''
+                })
+        except ValueError:
+            logging.warning('Unable to get feature names, feature_type: %s, feature_map: %s', feature_type, feature_map)
 
         return feature_names
 
@@ -388,8 +394,8 @@ def run(argv=None):
         required=True,
         help='Input Cloud Storage directory to process.')
     known_args, pipeline_args = parser.parse_known_args(argv)
-    pipeline_options = PipelineOptions(pipeline_args)
-    pipeline_options.view_as(SetupOptions).save_main_session = True
+    pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
+    standard_options = pipeline_options.view_as(StandardOptions)
 
     gcs_dir = get_gcs_dir(known_args.input)
     client, crawl_date = get_crawl_info(known_args.input)
@@ -408,7 +414,7 @@ def run(argv=None):
         | 'MapPages' >> beam.FlatMap(lambda har: get_page(har, client, crawl_date))
         | 'WritePages' >> beam.io.WriteToBigQuery(
             'httparchive:all.pages',
-            schema='SCHEMA_AUTODETECT',
+            schema=constants.bigquery["schemas"]["all_pages"],
             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
             create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER)
     )
@@ -418,11 +424,10 @@ def run(argv=None):
         | 'MapRequests' >> beam.FlatMap(lambda har: get_requests(har, client, crawl_date))
         | 'WriteRequests' >> beam.io.WriteToBigQuery(
             'httparchive:all.requests',
-            schema='SCHEMA_AUTODETECT',
+            schema=constants.bigquery["schemas"]["all_requests"],
             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
             create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
-
-if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.INFO)
-    run()
+    pipeline_result = pipeline.run()
+    if not isinstance(pipeline.runner, DataflowRunner):
+        pipeline_result.wait_until_finish()

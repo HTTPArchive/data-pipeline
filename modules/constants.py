@@ -18,6 +18,16 @@ bigquery = {
                 pkg_resources.read_text("schema", "summary_requests.json")
             )
         },
+        "all_pages": {
+            "fields": json.loads(
+                pkg_resources.read_text("schema", "all_pages.json")
+            )
+        },
+        "all_requests": {
+            "fields": json.loads(
+                pkg_resources.read_text("schema", "all_requests.json")
+            )
+        },
     },
 }
 

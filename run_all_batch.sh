@@ -1,5 +1,5 @@
 #!/bin/bash
-python bigquery_import.py \
+python run_all.py \
   --input=crawls/test-May_25_2022 \
   --runner=DataflowRunner \
   --project=httparchive \
