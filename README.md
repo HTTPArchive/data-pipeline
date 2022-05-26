@@ -4,6 +4,8 @@ The new HTTP Archive data pipeline built entirely on GCP
 ## Initial setup
 TODO: follow known instructions
 
+TODO: python3.8
+
 ```shell
 # Install GCP SDK and authenticate
 gcloud init

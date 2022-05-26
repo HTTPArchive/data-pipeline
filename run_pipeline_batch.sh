@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
 python3 run_pipeline.py \
-  --input=gs://httparchive/crawls/test-May_25_2022 \
+  --input=gs://httparchive/crawls/android-May_12_2022 \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
