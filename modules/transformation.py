@@ -415,6 +415,8 @@ class ImportHarJson(beam.DoFn):
             else 0
         )
 
+        avg_dom_depth = int(float(page.get("_avg_dom_depth", 0)))
+
         return {
             "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
             "client": status_info["client"],
@@ -444,7 +446,7 @@ class ImportHarJson(beam.DoFn):
             "PageSpeed": page.get("_pageSpeed", {}).get("score"),
             "_connections": page.get("_connections"),
             "_adult_site": page.get("_adult_site", False),
-            "avg_dom_depth": page.get("_avg_dom_depth"),
+            "avg_dom_depth": avg_dom_depth,
             "doctype": page.get("_doctype"),
             "document_height": document_height,
             "document_width": document_width,
