@@ -395,7 +395,8 @@ def run(argv=None):
         help='Input Cloud Storage directory to process.')
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
-    standard_options = pipeline_options.view_as(StandardOptions)
+    # To be used for streaming.
+    #standard_options = pipeline_options.view_as(StandardOptions)
 
     gcs_dir = get_gcs_dir(known_args.input)
     client, crawl_date = get_crawl_info(known_args.input)
