@@ -540,7 +540,7 @@ class ImportHarJson(beam.DoFn):
                     size[frmt] += resp_size
 
             # count unique domains (really hostnames)
-            matches = re.findall(r"http[s]*://([^/]*)", url)
+            matches = re.findall(r"(?:http|ws)[s]*://([^/]*)", url)
             if url and matches:
                 hostname = matches[0]
                 if hostname not in domains:
@@ -548,7 +548,7 @@ class ImportHarJson(beam.DoFn):
                 else:
                     domains[hostname] += 1
             else:
-                logging.error(
+                logging.warning(
                     f"No hostname found in URL: {url}. status_info={status_info}"
                 )
 
