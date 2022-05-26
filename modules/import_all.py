@@ -50,9 +50,9 @@ def get_page(har, client, crawl_date):
 
     payload_size = len(payload_json)
     if payload_size > MAX_CONTENT_SIZE:
-        logging.warning('Skipping pages payload for "%s": ' \
-            'payload size (%s) exceeds the maximum content size of %s bytes.',
-            url, payload_size, MAX_CONTENT_SIZE)
+        logging.warning('Skipping pages payload for "%s": '
+                'payload size (%s) exceeds the maximum content size of %s bytes.',
+                url, payload_size, MAX_CONTENT_SIZE)
         return
 
     custom_metrics = get_custom_metrics(page)
@@ -214,9 +214,9 @@ def get_lighthouse_reports(har):
 
     report_size = len(report_json)
     if report_size > MAX_CONTENT_SIZE:
-        logging.warning('Skipping Lighthouse report: ' \
-            'Report size (%s) exceeded maximum content size of %s bytes.',
-            report_size, MAX_CONTENT_SIZE)
+        logging.warning('Skipping Lighthouse report: '
+                'Report size (%s) exceeded maximum content size of %s bytes.',
+                report_size, MAX_CONTENT_SIZE)
         return
 
     return report_json
@@ -267,15 +267,15 @@ def get_requests(har, client, crawl_date):
         try:
             payload = to_json(trim_request(request))
         except ValueError:
-            logging.warning('Skipping requests payload for "%s": ' \
-                'unable to stringify as JSON.', request_url)
+            logging.warning('Skipping requests payload for "%s": '
+                    'unable to stringify as JSON.', request_url)
             continue
 
         payload_size = len(payload)
         if payload_size > MAX_CONTENT_SIZE:
-            logging.warning('Skipping requests payload for "%s": ' \
-                'payload size (%s) exceeded maximum content size of %s bytes.',
-                request_url, payload_size, MAX_CONTENT_SIZE)
+            logging.warning('Skipping requests payload for "%s": '
+                    'payload size (%s) exceeded maximum content size of %s bytes.',
+                    request_url, payload_size, MAX_CONTENT_SIZE)
             continue
 
         response_body = None
@@ -397,27 +397,27 @@ def run(argv=None):
     pipeline = beam.Pipeline(options=pipeline_options)
 
     hars = (pipeline
-        | beam.Create([gcs_dir])
-        | beam.io.ReadAllFromText()
-        | 'MapJSON' >> beam.Map(from_json))
+            | beam.Create([gcs_dir])
+            | beam.io.ReadAllFromText()
+            | 'MapJSON' >> beam.Map(from_json))
 
     _ = (hars
-        | 'MapPages' >> beam.FlatMap(
-            lambda har: get_page(har, client, crawl_date))
-        | 'WritePages' >> beam.io.WriteToBigQuery(
-            'httparchive:all.pages',
-            schema='SCHEMA_AUTODETECT',
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+            | 'MapPages' >> beam.FlatMap(
+                lambda har: get_page(har, client, crawl_date))
+            | 'WritePages' >> beam.io.WriteToBigQuery(
+                'httparchive:all.pages',
+                schema='SCHEMA_AUTODETECT',
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
     _ = (hars
-        | 'MapRequests' >> beam.FlatMap(
-            lambda har: get_requests(har, client, crawl_date))
-        | 'WriteRequests' >> beam.io.WriteToBigQuery(
-            'httparchive:all.requests',
-            schema='SCHEMA_AUTODETECT',
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+            | 'MapRequests' >> beam.FlatMap(
+                lambda har: get_requests(har, client, crawl_date))
+            | 'WriteRequests' >> beam.io.WriteToBigQuery(
+                'httparchive:all.requests',
+                schema='SCHEMA_AUTODETECT',
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
 
 if __name__ == '__main__':
