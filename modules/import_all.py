@@ -10,7 +10,6 @@ import logging
 import re
 
 import apache_beam as beam
-import apache_beam.io.gcp.gcsio as gcsio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
 
@@ -45,13 +44,13 @@ def get_page(har, client, crawl_date):
 
     try:
         payload_json = to_json(page)
-    except:
-        logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.' % url)
+    except ValueError:
+        logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', url)
         return
 
     payload_size = len(payload_json)
     if payload_size > MAX_CONTENT_SIZE:
-        logging.warning('Skipping pages payload for "%s": payload size (%s) exceeds the maximum content size of %s bytes.' % (url, payload_size, MAX_CONTENT_SIZE))
+        logging.warning('Skipping pages payload for "%s": payload size (%s) exceeds the maximum content size of %s bytes.', url, payload_size, MAX_CONTENT_SIZE)
         return
 
     custom_metrics = get_custom_metrics(page)
@@ -80,19 +79,19 @@ def get_page(har, client, crawl_date):
 
 def get_custom_metrics(page):
     """ Transforms the page data into a custom metrics object. """
-    
+
     custom_metrics = {}
 
     for metric in page.get('_custom'):
         value = page.get(metric)
 
-    if type(value) == type(''):
-        try:
-            value = json.loads(value)
-        except:
-            pass
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                pass
 
-    custom_metrics[metric] = value
+        custom_metrics[metric] = value
 
     return to_json(custom_metrics)
 
@@ -109,36 +108,33 @@ def get_features(page):
         return
 
     def get_feature_names(feature_map, feature_type):
-        try:
-            feature_names = []
+        feature_names = []
 
-            for (key, value) in feature_map:
-                if value.get('name'):
-                    feature_names.append({
+        for (key, value) in feature_map:
+            if value.get('name'):
+                feature_names.append({
                     'feature': value.get('name'),
                     'type': feature_type,
                     'id': key
-                    })
-                    continue
-
-                match = id_pattern.match(key)
-                if match:
-                    feature_names.append({
-                        'feature': '',
-                        'type': feature_type,
-                        'id': match.group(1)
-                    })
-                    continue
-
-                feature_names.append({
-                    'feature': key,
-                    'type': feature_type,
-                    'id': ''
                 })
+                continue
 
-            return feature_names
-        except:
-            return []
+            match = id_pattern.match(key)
+            if match:
+                feature_names.append({
+                    'feature': '',
+                    'type': feature_type,
+                    'id': match.group(1)
+                })
+                continue
+
+            feature_names.append({
+                'feature': key,
+                'type': feature_type,
+                'id': ''
+            })
+
+        return feature_names
 
     id_pattern = re.compile(r'^Feature_(\d+)$')
 
@@ -176,7 +172,7 @@ def get_technologies(page):
         for app_id in apps.split(','):
             app = app_map.get(app_id)
             info = ''
-            if app == None:
+            if app is None:
                 app = app_id
             else:
                 info = app_id[len(app):].strip()
@@ -210,13 +206,13 @@ def get_lighthouse_reports(har):
 
     try:
         report_json = to_json(report)
-    except:
+    except ValueError:
         logging.warning('Skipping Lighthouse report: unable to stringify as JSON.')
         return
 
     report_size = len(report_json)
     if report_size > MAX_CONTENT_SIZE:
-        logging.warning('Skipping Lighthouse report: Report size (%s) exceeded maximum content size of %s bytes.' % (report_size, MAX_CONTENT_SIZE))
+        logging.warning('Skipping Lighthouse report: Report size (%s) exceeded maximum content size of %s bytes.', report_size, MAX_CONTENT_SIZE)
         return
 
     return report_json
@@ -266,20 +262,20 @@ def get_requests(har, client, crawl_date):
 
         try:
             payload = to_json(trim_request(request))
-        except:
-            logging.warning('Skipping requests payload for "%s": unable to stringify as JSON.' % request_url)
+        except ValueError:
+            logging.warning('Skipping requests payload for "%s": unable to stringify as JSON.', request_url)
             continue
 
         payload_size = len(payload)
         if payload_size > MAX_CONTENT_SIZE:
-            logging.warning('Skipping requests payload for "%s": payload size (%s) exceeded maximum content size of %s bytes.' % (request_url, payload_size, MAX_CONTENT_SIZE))
+            logging.warning('Skipping requests payload for "%s": payload size (%s) exceeded maximum content size of %s bytes.', request_url, payload_size, MAX_CONTENT_SIZE)
             continue
 
         response_body = None
         if request.get('response') and request.get('response').get('content'):
             response_body = request.get('response').get('content').get('text', None)
 
-            if response_body != None:
+            if response_body is not None:
                 response_body = response_body[:MAX_CONTENT_SIZE]
 
         requests.append({
@@ -345,28 +341,28 @@ def to_json(obj):
     return json.dumps(obj, separators=(',', ':'), ensure_ascii=False)
 
 
-def from_json(str):
+def from_json(string):
     """Returns an object from the JSON representation."""
 
     try:
-        return json.loads(str)
-    except Exception as e:
-        logging.error('Unable to parse JSON object "%s...": %s' % (str[:50], e))
+        return json.loads(string)
+    except json.JSONDecodeError as err:
+        logging.error('Unable to parse JSON object "%s...": %s', string[:50], err)
         return
 
 
 def get_crawl_info(release):
     """Formats a release string into a BigQuery date."""
 
-    client, date_string = release.split('-')
+    client, date_string = release.split('/')[-1].split('-')
 
     if client == 'chrome':
         client = 'desktop'
     elif client == 'android':
         client = 'mobile'
 
-    date_obj = datetime.strptime(date_string, '%b_%d_%Y') # Mar_01_2020
-    crawl_date = date_obj.strftime('%Y-%m-%d') # 2020-03-01
+    date_obj = datetime.strptime(date_string, '%b_%d_%Y')  # Mar_01_2020
+    crawl_date = date_obj.strftime('%Y-%m-%d')  # 2020-03-01
 
     return (client, crawl_date)
 
@@ -388,33 +384,33 @@ def run(argv=None):
     pipeline_options = PipelineOptions(pipeline_args)
     pipeline_options.view_as(SetupOptions).save_main_session = True
 
+    gcs_dir = get_gcs_dir(known_args.input)
+    client, crawl_date = get_crawl_info(known_args.input)
 
-    with beam.Pipeline(options=pipeline_options) as p:
-        gcs_dir = get_gcs_dir(known_args.input)
-        client, crawl_date = get_crawl_info(known_args.input)
+    pipeline = beam.Pipeline(options=pipeline_options)
 
-        hars = (p
-            | beam.Create([gcs_dir])
-            | beam.io.ReadAllFromText()
-            | 'MapJSON' >> beam.Map(from_json))
+    hars = (pipeline
+        | beam.Create([gcs_dir])
+        | beam.io.ReadAllFromText()
+        | 'MapJSON' >> beam.Map(from_json))
 
-        _ = (hars
-            | 'MapPages' >> beam.FlatMap(
-                lambda har: get_page(har, client, crawl_date))
-            | 'WritePages' >> beam.io.WriteToBigQuery(
-                'httparchive:all.pages',
-                schema='SCHEMA_AUTODETECT',
-                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+    _ = (hars
+        | 'MapPages' >> beam.FlatMap(
+            lambda har: get_page(har, client, crawl_date))
+        | 'WritePages' >> beam.io.WriteToBigQuery(
+            'httparchive:all.pages',
+            schema='SCHEMA_AUTODETECT',
+            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
-        _ = (hars
-            | 'MapRequests' >> beam.FlatMap(
-                lambda har: get_requests(har, client, crawl_date))
-            | 'WriteRequests' >> beam.io.WriteToBigQuery(
-                'httparchive:all.requests',
-                schema='SCHEMA_AUTODETECT',
-                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+    _ = (hars
+        | 'MapRequests' >> beam.FlatMap(
+            lambda har: get_requests(har, client, crawl_date))
+        | 'WriteRequests' >> beam.io.WriteToBigQuery(
+            'httparchive:all.requests',
+            schema='SCHEMA_AUTODETECT',
+            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
 
 if __name__ == '__main__':
