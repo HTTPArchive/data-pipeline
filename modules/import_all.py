@@ -455,7 +455,8 @@ def run(argv=None):
     for i in range(NUM_PARTITIONS):
         _ = (
             hars
-            | f'MapRequests{i}' >> beam.FlatMap(lambda har: partition_requests(har, client, crawl_date, i))
+            | f'MapRequests{i}' >> beam.FlatMap(
+                (lambda i: lambda har: partition_requests(har, client, crawl_date, i))(i))
             | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
                 'httparchive:all.requests',
                 schema=constants.bigquery["schemas"]["all_requests"],

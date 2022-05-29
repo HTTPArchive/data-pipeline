@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
 python3 run_pipeline.py \
-  --input=gs://httparchive/crawls/android-May_12_2022 \
+  --input=gs://httparchive/chrome-May_12i se_2022 \
+  --job_name="rviscomi-websocket-test-78" \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
