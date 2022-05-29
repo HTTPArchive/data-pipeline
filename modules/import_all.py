@@ -249,7 +249,7 @@ def partition_requests(har, client, crawl_date, index):
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
         page_url = metadata.get('tested_url', page_url)
         client = metadata.get('layout', client).lower()
-    
+
     return get_requests(har, client, crawl_date)
 
 
@@ -339,9 +339,9 @@ def get_requests(har, client, crawl_date):
 
 
 def hash_url(url):
-  """Hashes a given URL to a process-stable integer value."""
+    """Hashes a given URL to a process-stable integer value."""
 
-  return int(sha256(url.encode('utf-8')).hexdigest(), 16)
+    return int(sha256(url.encode('utf-8')).hexdigest(), 16)
 
 
 def trim_request(request):
@@ -385,7 +385,8 @@ def to_json(obj):
     if not obj:
         raise ValueError
 
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False)
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode(
+        'utf-8', 'surrogateescape').decode('utf-8', 'replace')
 
 
 def from_json(string):
