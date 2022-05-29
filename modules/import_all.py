@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import argparse
 from copy import deepcopy
 from datetime import datetime
+from hashlib import sha256
 import json
 import logging
 import re
@@ -18,6 +19,8 @@ from modules import constants
 
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 10 * 1024 * 1024
+# Number of times to partition the requests tables.
+NUM_PARTITIONS = 4
 
 
 def get_page(har, client, crawl_date):
@@ -228,6 +231,28 @@ def get_lighthouse_reports(har):
     return report_json
 
 
+def partition_requests(har, client, crawl_date, index):
+    """Partitions requests across multiple concurrent steps."""
+
+    if not har:
+        return
+
+    page = har.get('log').get('pages')[0]
+    page_url = page.get('_URL')
+
+    if hash_url(page_url) % NUM_PARTITIONS != index:
+        return
+
+    metadata = page.get('_metadata')
+    if metadata:
+        # The page URL from metadata is more accurate.
+        # See https://github.com/HTTPArchive/data-pipeline/issues/48
+        page_url = metadata.get('tested_url', page_url)
+        client = metadata.get('layout', client).lower()
+    
+    return get_requests(har, client, crawl_date)
+
+
 def get_requests(har, client, crawl_date):
     """Parses the requests from the HAR."""
 
@@ -313,6 +338,12 @@ def get_requests(har, client, crawl_date):
     return requests
 
 
+def hash_url(url):
+  """Hashes a given URL to a process-stable integer value."""
+
+  return int(sha256(url.encode('utf-8')).hexdigest(), 16)
+
+
 def trim_request(request):
     """Removes redundant fields from the request object."""
 
@@ -386,7 +417,7 @@ def get_crawl_info(release):
 def get_gcs_dir(release):
     """Formats a release string into a gs:// directory."""
 
-    return 'gs://httparchive/%s/' % release
+    return f'gs://httparchive/{release}/'
 
 
 def run(argv=None):
@@ -421,14 +452,15 @@ def run(argv=None):
             create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER)
     )
 
-    _ = (
-        hars
-        | 'MapRequests' >> beam.FlatMap(lambda har: get_requests(har, client, crawl_date))
-        | 'WriteRequests' >> beam.io.WriteToBigQuery(
-            'httparchive:all.requests',
-            schema=constants.bigquery["schemas"]["all_requests"],
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+    for i in range(NUM_PARTITIONS):
+        _ = (
+            hars
+            | f'MapRequests{i}' >> beam.FlatMap(lambda har: partition_requests(har, client, crawl_date, i))
+            | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
+                'httparchive:all.requests',
+                schema=constants.bigquery["schemas"]["all_requests"],
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
 
     pipeline_result = pipeline.run()
     if not isinstance(pipeline.runner, DataflowRunner):

@@ -1,6 +1,7 @@
 #!/bin/bash
 python run_all.py \
   --input=crawls/test-May_25_2022 \
+  --job_name="rviscomi-import-all-desktop" \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
