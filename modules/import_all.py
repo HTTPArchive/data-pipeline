@@ -117,7 +117,10 @@ def get_custom_metrics(page, wptid):
             try:
                 value = json.loads(value)
             except ValueError:
-                logging.warning('Unable to parse custom metric %s as JSON for %s', metric, wptid)
+                logging.warning('ValueError: Unable to parse custom metric %s as JSON for %s', metric, wptid)
+                continue
+            except RecursionError:
+                logging.warning('RecursionError: Unable to parse custom metric %s as JSON for %s', metric, wptid)
                 continue
 
         custom_metrics[metric] = value
