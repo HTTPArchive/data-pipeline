@@ -71,19 +71,19 @@ def get_page(har, client, crawl_date):
     try:
         payload_json = to_json(page)
     except ValueError:
-        logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', url)
+        logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', wptid)
         return
 
     payload_size = len(payload_json)
     if payload_size > MAX_CONTENT_SIZE:
         logging.warning('Skipping pages payload for "%s": '
                         'payload size (%s) exceeds the maximum content size of %s bytes.',
-                        url, payload_size, MAX_CONTENT_SIZE)
+                        wptid, payload_size, MAX_CONTENT_SIZE)
         return
 
-    custom_metrics = get_custom_metrics(page)
-    lighthouse = get_lighthouse_reports(har)
-    features = get_features(page)
+    custom_metrics = get_custom_metrics(page, wptid)
+    lighthouse = get_lighthouse_reports(har, wptid)
+    features = get_features(page, wptid)
     technologies = get_technologies(page)
 
     return [{
@@ -105,7 +105,7 @@ def get_page(har, client, crawl_date):
     }]
 
 
-def get_custom_metrics(page):
+def get_custom_metrics(page, wptid):
     """ Transforms the page data into a custom metrics object. """
 
     custom_metrics = {}
@@ -117,15 +117,21 @@ def get_custom_metrics(page):
             try:
                 value = json.loads(value)
             except ValueError:
-                logging.warning('Unable to parse custom metric %s as JSON', metric)
+                logging.warning('Unable to parse custom metric %s as JSON for %s', metric, wptid)
                 continue
 
         custom_metrics[metric] = value
 
-    return to_json(custom_metrics)
+    try:
+        custom_metrics_json = to_json(custom_metrics)
+    except UnicodeEncodeError:
+        logging.warning('Unable to JSON encode custom metrics for %s', wptid)
+        return
+
+    return custom_metrics_json
 
 
-def get_features(page):
+def get_features(page, wptid):
     """Parses the features from a page."""
 
     if not page:
@@ -164,7 +170,8 @@ def get_features(page):
                     'id': ''
                 })
         except ValueError:
-            logging.warning('Unable to get feature names, feature_type: %s, feature_map: %s', feature_type, feature_map)
+            logging.warning('Unable to get feature names for %s. Feature_type: %s, feature_map: %s',
+                            wptid, feature_type, feature_map)
 
         return feature_names
 
@@ -197,7 +204,7 @@ def get_technologies(page):
 
         # There may be multiple info values. Add each to the map.
         for info in info_list.split(','):
-            app_id = '%s %s' % (app, info) if len(info) > 0 else app
+            app_id = f'{app} {info}' if len(info) > 0 else app
             app_map[app_id] = app
 
     for category, apps in categories.items():
@@ -222,7 +229,7 @@ def get_technologies(page):
     return list(technologies.values())
 
 
-def get_lighthouse_reports(har):
+def get_lighthouse_reports(har, wptid):
     """Parses Lighthouse results from a HAR object."""
 
     if not har:
@@ -239,14 +246,14 @@ def get_lighthouse_reports(har):
     try:
         report_json = to_json(report)
     except ValueError:
-        logging.warning('Skipping Lighthouse report: unable to stringify as JSON.')
+        logging.warning('Skipping Lighthouse report for %s: unable to stringify as JSON.', wptid)
         return
 
     report_size = len(report_json)
     if report_size > MAX_CONTENT_SIZE:
-        logging.warning('Skipping Lighthouse report: '
+        logging.warning('Skipping Lighthouse report for %s: '
                         'Report size (%s) exceeded maximum content size of %s bytes.',
-                        report_size, MAX_CONTENT_SIZE)
+                        wptid, report_size, MAX_CONTENT_SIZE)
         return
 
     return report_json
@@ -407,7 +414,7 @@ def to_json(obj):
         raise ValueError
 
     return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode(
-        'utf-8', 'surrogateescape').decode('utf-8', 'replace')
+        'utf-8', 'surrogatepass').decode('utf-8', 'replace')
 
 
 def from_json(string):
