@@ -23,6 +23,27 @@ MAX_CONTENT_SIZE = 10 * 1024 * 1024
 NUM_PARTITIONS = 4
 
 
+def partition_step(function, har, client, crawl_date, index):
+    """Partitions functions across multiple concurrent steps."""
+
+    if not har:
+        logging.warning('Unable to partition step, null HAR.')
+        return
+
+    page = har.get('log', {}).get('pages', [{}])[0]
+    page_url = page.get('_URL')
+
+    if not page_url:
+        logging.warning('Skipping HAR: unable to get page URL (see preceding warning).')
+        return
+
+    hashed_url = hash_url(page_url)
+    if hashed_url % NUM_PARTITIONS != index:
+        return
+
+    return function(har, client, crawl_date)
+
+
 def get_page(har, client, crawl_date):
     """Parses the page from a HAR object."""
 
@@ -443,21 +464,21 @@ def run(argv=None):
         | 'MapJSON' >> beam.Map(from_json)
     )
 
-    _ = (
-        hars
-        | 'MapPages' >> beam.FlatMap(lambda har: get_page(har, client, crawl_date))
-        | 'WritePages' >> beam.io.WriteToBigQuery(
-            'httparchive:all.pages',
-            schema=constants.bigquery["schemas"]["all_pages"],
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER)
-    )
-
     for i in range(NUM_PARTITIONS):
         _ = (
             hars
+            | f'MapPage{i}s' >> beam.FlatMap(
+                (lambda i: lambda har: partition_step(get_page, har, client, crawl_date, i))(i))
+            | f'WritePages{i}' >> beam.io.WriteToBigQuery(
+                'httparchive:all.pages',
+                schema=constants.bigquery["schemas"]["all_pages"],
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+
+        _ = (
+            hars
             | f'MapRequests{i}' >> beam.FlatMap(
-                (lambda i: lambda har: partition_requests(har, client, crawl_date, i))(i))
+                (lambda i: lambda har: partition_step(get_requests, har, client, crawl_date, i))(i))
             | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
                 'httparchive:all.requests',
                 schema=constants.bigquery["schemas"]["all_requests"],
