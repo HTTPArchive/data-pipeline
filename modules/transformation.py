@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import re
-from json import JSONDecodeError
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
@@ -140,7 +139,7 @@ class ImportHarJson(beam.DoFn):
 
         try:
             har = json.loads(element)
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             logging.warning(f"JSON decode failed for: {file_name}")
             return None, None
 
