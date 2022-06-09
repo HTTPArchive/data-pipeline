@@ -6,7 +6,6 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
-import apache_beam.io.fileio as fileio
 from apache_beam.io.gcp.bigquery_tools import FileFormat, RetryStrategy
 from dateutil import parser as date_parser
 
