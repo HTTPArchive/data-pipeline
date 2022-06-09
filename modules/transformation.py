@@ -35,7 +35,7 @@ class ReadHarFiles(beam.PTransform):
         # GCS pipeline
         else:
             matching = (
-                self.input if ".har.gz" in self.input else f"{self.input}/*.har.gz"
+                self.input if self.input.endswith(".har.gz") else f"{self.input}/*.har.gz"
             )
 
             # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
@@ -46,9 +46,7 @@ class ReadHarFiles(beam.PTransform):
             files = (
                 p
                 # TODO replace with match continuously for streaming?
-                | fileio.MatchFiles(matching)
-                | "ExtractPath" >> beam.Map(lambda f: f.path)
-                | beam.Reshuffle()
+                | beam.Create([matching])
                 | beam.io.ReadAllFromText(with_filename=True)
             )
 
