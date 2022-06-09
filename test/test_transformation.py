@@ -30,3 +30,7 @@ class TestImportHarJson(TestCase):
     def test_import_page_empty_status_info(self):
         with self.assertRaises(Exception):
             ImportHarJson.import_page(None, {})
+
+    def test_import_har_json_bad_data(self):
+        with self.assertRaises(StopIteration):
+            next(ImportHarJson().process(("file_name", "data")))
