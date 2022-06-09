@@ -6,7 +6,6 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
-import apache_beam.io.fileio as fileio
 from apache_beam.io.gcp.bigquery_tools import FileFormat, RetryStrategy
 from dateutil import parser as date_parser
 
@@ -35,7 +34,7 @@ class ReadHarFiles(beam.PTransform):
         # GCS pipeline
         else:
             matching = (
-                self.input if ".har.gz" in self.input else f"{self.input}/*.har.gz"
+                self.input if self.input.endswith(".har.gz") else f"{self.input}/*.har.gz"
             )
 
             # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
@@ -46,9 +45,7 @@ class ReadHarFiles(beam.PTransform):
             files = (
                 p
                 # TODO replace with match continuously for streaming?
-                | fileio.MatchFiles(matching)
-                | "ExtractPath" >> beam.Map(lambda f: f.path)
-                | beam.Reshuffle()
+                | beam.Create([matching])
                 | beam.io.ReadAllFromText(with_filename=True)
             )
 
@@ -192,6 +189,7 @@ class ImportHarJson(beam.DoFn):
         for entry in entries:
 
             ret_request = {
+                "requestid": (status_info["pageid"] << 32) + entry["_number"],
                 "client": status_info["client"],
                 "date": status_info["date"],
                 "pageid": status_info["pageid"],
@@ -366,7 +364,7 @@ class ImportHarJson(beam.DoFn):
             first_html = False
             if not first_url:
                 if (400 <= status <= 599) or 12000 <= status:
-                    logging.error(
+                    logging.warning(
                         f"The first request ({url}) failed with status {status}. status_info={status_info}"
                     )
                     return None, None, None
