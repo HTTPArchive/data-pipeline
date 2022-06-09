@@ -367,7 +367,7 @@ class ImportHarJson(beam.DoFn):
             first_html = False
             if not first_url:
                 if (400 <= status <= 599) or 12000 <= status:
-                    logging.error(
+                    logging.warning(
                         f"The first request ({url}) failed with status {status}. status_info={status_info}"
                     )
                     return None, None, None
