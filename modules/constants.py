@@ -6,6 +6,8 @@ bigquery = {
     "datasets": {
         "pages": "httparchive:experimental_summary_pages",
         "requests": "httparchive:experimental_summary_requests",
+        "home_pages": "httparchive:summary_pages",
+        "home_requests": "httparchive:summary_requests",
     },
     "schemas": {
         "pages": {

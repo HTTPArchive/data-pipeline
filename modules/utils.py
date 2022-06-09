@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import os
 
@@ -200,3 +201,11 @@ def clamp_integers(data, columns):
 def int_columns_for_schema(schema_name):
     schema = constants.bigquery['schemas'][schema_name]['fields']
     return [field['name'] for field in schema if field['type'] == 'INTEGER']
+
+
+def is_home_page(element):
+    metadata = element.get("metadata")
+    if metadata:
+        return json.loads(metadata).get("crawl_depth", 0) == 0
+    else:
+        return True
