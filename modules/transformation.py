@@ -192,6 +192,7 @@ class ImportHarJson(beam.DoFn):
         for entry in entries:
 
             ret_request = {
+                "requestid": (status_info["pageid"] << 32) + entry["_number"],
                 "client": status_info["client"],
                 "date": status_info["date"],
                 "pageid": status_info["pageid"],
