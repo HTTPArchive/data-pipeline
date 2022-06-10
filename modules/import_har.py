@@ -68,7 +68,7 @@ def parse_args(argv):
     return parser.parse_known_args(argv)
 
 
-def run(argv=None):
+def create_pipeline(argv=None):
     known_args, pipeline_args = parse_args(argv)
     logging.info(f"Pipeline Options: known_args={known_args},pipeline_args={pipeline_args}")
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
@@ -158,6 +158,16 @@ def run(argv=None):
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
 
-    pipeline_result = p.run()
+    return p
+
+
+def run(argv=None):
+    logging.getLogger().setLevel(logging.INFO)
+    p = create_pipeline()
+    pipeline_result = p.run(argv)
     if not isinstance(p.runner, DataflowRunner):
         pipeline_result.wait_until_finish()
+
+
+if __name__ == '__main__':
+    run()
