@@ -14,25 +14,28 @@ def parse_args(argv):
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-            "--input",
-            dest="input",
-            help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022",
-        )
+        "--input",
+        dest="input",
+        help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022",
+    )
 
     parser.add_argument(
-            "--subscription",
-            dest="subscription",
-            help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
-        )
+        "--subscription",
+        dest="subscription",
+        help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
+    )
 
-    bq_write_methods = [WriteToBigQuery.Method.STREAMING_INSERTS, WriteToBigQuery.Method.FILE_LOADS]
+    bq_write_methods = [
+        WriteToBigQuery.Method.STREAMING_INSERTS,
+        WriteToBigQuery.Method.FILE_LOADS,
+    ]
     parser.add_argument(
-            "--big_query_write_method",
-            dest="big_query_write_method",
-            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
-            choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
-        )
+        "--big_query_write_method",
+        dest="big_query_write_method",
+        help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
+        choices=bq_write_methods,
+        default=WriteToBigQuery.Method.STREAMING_INSERTS,
+    )
 
     parser.add_argument(
         "--dataset_summary_pages",
@@ -95,7 +98,9 @@ def run(argv=None):
     deadletter_queues = {}
 
     deadletter_queues["pages"] = pages | "WritePagesToBigQuery" >> WriteBigQuery(
-        table=lambda row: utils.format_table_name(row, known_args.dataset_summary_pages),
+        table=lambda row: utils.format_table_name(
+            row, known_args.dataset_summary_pages
+        ),
         schema=constants.bigquery["schemas"]["pages"],
         streaming=standard_options.streaming,
         method=known_args.big_query_write_method,
@@ -104,7 +109,9 @@ def run(argv=None):
     deadletter_queues[
         "requests"
     ] = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
-        table=lambda row: utils.format_table_name(row, known_args.dataset_summary_requests),
+        table=lambda row: utils.format_table_name(
+            row, known_args.dataset_summary_requests
+        ),
         schema=constants.bigquery["schemas"]["requests"],
         streaming=standard_options.streaming,
         method=known_args.big_query_write_method,
@@ -113,7 +120,9 @@ def run(argv=None):
     deadletter_queues[
         "home_pages"
     ] = home_pages | "WriteHomePagesToBigQuery" >> WriteBigQuery(
-        table=lambda row: utils.format_table_name(row, known_args.dataset_summary_pages_home_only),
+        table=lambda row: utils.format_table_name(
+            row, known_args.dataset_summary_pages_home_only
+        ),
         schema=constants.bigquery["schemas"]["pages"],
         streaming=standard_options.streaming,
         method=known_args.big_query_write_method,
@@ -122,7 +131,9 @@ def run(argv=None):
     deadletter_queues[
         "home_requests"
     ] = home_requests | "WriteHomeRequestsToBigQuery" >> WriteBigQuery(
-        table=lambda row: utils.format_table_name(row, known_args.dataset_summary_requests_home_only),
+        table=lambda row: utils.format_table_name(
+            row, known_args.dataset_summary_requests_home_only
+        ),
         schema=constants.bigquery["schemas"]["requests"],
         streaming=standard_options.streaming,
         method=known_args.big_query_write_method,
