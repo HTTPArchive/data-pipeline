@@ -23,12 +23,10 @@ class ReadHarFiles(beam.PTransform):
         if self.subscription:
             files = (
                 p
-                | ReadFromPubSub(subscription=self.subscription, with_attributes=True)
-                | beam.Filter(lambda e: e.attributes["objectId"].endswith(".har.gz"))
-                | "GetFileName"
-                >> beam.Map(
-                    lambda e: f"gs://{e.attributes['bucketId']}/{e.attributes['objectId']}"
-                )
+                | ReadFromPubSub(subscription=self.subscription)
+                | "Decode" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
+                | "FilterHarGz" >> beam.Filter(lambda e: e["name"].endswith(".har.gz"))
+                | "GetFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
                 | beam.io.ReadAllFromText(with_filename=True)
             )
         # GCS pipeline
