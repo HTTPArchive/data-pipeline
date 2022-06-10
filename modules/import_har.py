@@ -15,7 +15,7 @@ def parse_args(argv):
     parser.add_argument(
         "--input",
         dest="input",
-        help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022"
+        help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022",
     )
     parser.add_argument(
         "--subscription",
@@ -47,38 +47,52 @@ def run(argv=None):
         | "ParseHar" >> beam.ParDo(ImportHarJson()).with_outputs("page", "requests")
     )
     pages, requests = parsed
-    requests = requests | "FlattenRequests" >> beam.FlatMap(
-        lambda elements: elements
-    )
+    requests = requests | "FlattenRequests" >> beam.FlatMap(lambda elements: elements)
 
-    pages_errors = pages | "WritePagesToBigQuery" >> WriteBigQuery(
+    home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
+    home_requests = requests | "FilterHomeRequests" >> beam.Filter(utils.is_home_page)
+
+    deadletter_queues = {}
+
+    deadletter_queues["pages"] = pages | "WritePagesToBigQuery" >> WriteBigQuery(
         table=lambda row: utils.format_table_name(row, "pages"),
         schema=constants.bigquery["schemas"]["pages"],
         streaming=standard_options.streaming,
     )
 
-    requests_errors = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
+    deadletter_queues[
+        "requests"
+    ] = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
         table=lambda row: utils.format_table_name(row, "requests"),
+        schema=constants.bigquery["schemas"]["requests"],
+        streaming=standard_options.streaming,
+    )
+
+    deadletter_queues[
+        "home_pages"
+    ] = home_pages | "WriteHomePagesToBigQuery" >> WriteBigQuery(
+        table=lambda row: utils.format_table_name(row, "home_pages"),
+        schema=constants.bigquery["schemas"]["pages"],
+        streaming=standard_options.streaming,
+    )
+
+    deadletter_queues[
+        "home_requests"
+    ] = home_requests | "WriteHomeRequestsToBigQuery" >> WriteBigQuery(
+        table=lambda row: utils.format_table_name(row, "home_requests"),
         schema=constants.bigquery["schemas"]["requests"],
         streaming=standard_options.streaming,
     )
 
     # deadletter logging
     if standard_options.streaming:
-        (
-            pages_errors[BigQueryWriteFn.FAILED_ROWS]
-            | "PrintPagesErrors"
-            >> beam.FlatMap(
-                lambda e: logging.error(f"Could not load page to BigQuery: {e}")
+        for name, transform in deadletter_queues.items():
+            transform_name = (
+                f"Print{name.replace('_', ' ').title().replace(' ', '')}Errors"
             )
-        )
-        (
-            requests_errors[BigQueryWriteFn.FAILED_ROWS]
-            | "PrintRequestsErrors"
-            >> beam.FlatMap(
-                lambda e: logging.error(f"Could not load request to BigQuery: {e}")
+            transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
+                lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
             )
-        )
 
     # TODO implement deadletter for FILE_LOADS?
     #  FAILED_ROWS not implemented for BigQueryBatchFileLoads in this version of beam (only _StreamToBigQuery)
