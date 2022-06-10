@@ -154,9 +154,9 @@ def client_name(file_name):
         return client.lower()
 
 
-def format_table_name(row, table):
+def format_table_name(row, table, const=constants.bigquery):
     table_name = "{}.{}_{}".format(
-        constants.bigquery["datasets"][table], row["date"], row["client"]
+        const["datasets"][table], row["date"], row["client"]
     )
 
     if not table_name:
