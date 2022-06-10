@@ -148,3 +148,11 @@ class Test(TestCase):
             self.assertEqual(data['b'], utils.BIGQUERY_MAX_INT)
             self.assertEqual(data['c'], None)
             self.assertIn("Clamping required for {'b': " + str(b), log.output[0])
+
+    def test_format_table_name(self):
+        constant = {"datasets": {"table_type": "project_name:dataset_name"}}
+        row = {"date": "2022-01-01", "client": "test"}
+        self.assertEqual(
+            utils.format_table_name(row, "table_type", constant),
+            f"{constant['datasets']['table_type']}.{row['date']}_{row['client']}"
+        )

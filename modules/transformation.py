@@ -6,7 +6,7 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
-from apache_beam.io.gcp.bigquery_tools import FileFormat, RetryStrategy
+from apache_beam.io.gcp.bigquery_tools import RetryStrategy
 from dateutil import parser as date_parser
 
 from modules import constants, utils
@@ -51,37 +51,32 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None):
+    def __init__(self, table, schema, streaming=None, method=None):
         super().__init__()
         self.table = table
         self.schema = schema
         self.streaming = streaming
+        self.method = method
 
     def resolve_params(self):
-        if self.streaming:
-            # streaming pipeline
+        if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
+                "method": WriteToBigQuery.Method.STREAMING_INSERTS,
                 "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
                 "write_disposition": BigQueryDisposition.WRITE_APPEND,
-                "with_auto_sharding": True,
-                # parameters for STREAMING_INSERTS
-                "method": WriteToBigQuery.Method.STREAMING_INSERTS,
-                "ignore_unknown_columns": True,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
-                # parameters for FILE_LOADS
-                # "method": WriteToBigQuery.Method.FILE_LOADS,
-                # "triggering_frequency": 5 * 60,  # seconds
-                # "additional_bq_parameters": {"ignoreUnknownValues": True},
+                "with_auto_sharding": self.streaming,
+                "ignore_unknown_columns": True,
             }
-        else:
-            # batch pipeline
+        if self.method == WriteToBigQuery.Method.FILE_LOADS:
             return {
+                "method": WriteToBigQuery.Method.FILE_LOADS,
                 "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
                 "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
-                "method": WriteToBigQuery.Method.FILE_LOADS,
-                "temp_file_format": FileFormat.JSON,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
             }
+        else:
+            raise RuntimeError(f"BigQuery write method not supported: {self.method}")
 
     def expand(self, pcoll, **kwargs):
         return pcoll | WriteToBigQuery(
