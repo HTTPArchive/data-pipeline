@@ -70,6 +70,7 @@ def parse_args(argv):
 
 def run(argv=None):
     known_args, pipeline_args = parse_args(argv)
+    logging.info(f"Pipeline Options: known_args={known_args},pipeline_args={pipeline_args}")
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     standard_options = pipeline_options.view_as(StandardOptions)
     if not (known_args.subscription or known_args.input):
