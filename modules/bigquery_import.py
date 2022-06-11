@@ -14,6 +14,7 @@ import apache_beam as beam
 import apache_beam.io.gcp.gcsio as gcsio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
+from apache_beam.runners import DataflowRunner
 
 
 # BigQuery can handle rows up to 100 MB.
@@ -91,7 +92,7 @@ def partition_step(fn, har, index):
   if hash % NUM_PARTITIONS != index:
     logging.info(f'Skipping partition. {hash} % {NUM_PARTITIONS} != {index}')
     return
-  
+
   return fn(har)
 
 
@@ -332,6 +333,58 @@ def get_bigquery_uri(release, dataset):
 
   return 'httparchive:%s.%s_%s' % (dataset, date_string, client)
 
+class WriteBigQuery(beam.PTransform):
+
+  def __init__(self, known_args, label=None):
+      super().__init__(label)
+      self.known_args = known_args
+
+  def expand(self, hars):
+    for i in range(NUM_PARTITIONS):
+      (hars
+       | f'MapPages{i}' >> beam.FlatMap(
+              (lambda i: lambda har: partition_step(get_page, har, i))(i))
+       | f'WritePages{i}' >> beam.io.WriteToBigQuery(
+              get_bigquery_uri(self.known_args.input, 'pages'),
+              schema='url:STRING, payload:STRING',
+              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+
+      (hars
+       | f'MapTechnologies{i}' >> beam.FlatMap(
+              (lambda i: lambda har: partition_step(get_technologies, har, i))(i))
+       | f'WriteTechnologies{i}' >> beam.io.WriteToBigQuery(
+              get_bigquery_uri(self.known_args.input, 'technologies'),
+              schema='url:STRING, category:STRING, app:STRING, info:STRING',
+              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+
+      (hars
+       | f'MapLighthouseReports{i}' >> beam.FlatMap(
+              (lambda i: lambda har: partition_step(get_lighthouse_reports, har, i))(i))
+       | f'WriteLighthouseReports{i}' >> beam.io.WriteToBigQuery(
+              get_bigquery_uri(self.known_args.input, 'lighthouse'),
+              schema='url:STRING, report:STRING',
+              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+      (hars
+       | f'MapRequests{i}' >> beam.FlatMap(
+              (lambda i: lambda har: partition_step(get_requests, har, i))(i))
+       | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
+              get_bigquery_uri(self.known_args.input, 'requests'),
+              schema='page:STRING, url:STRING, payload:STRING',
+              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+
+      (hars
+       | f'MapResponseBodies{i}' >> beam.FlatMap(
+              (lambda i: lambda har: partition_step(get_response_bodies, har, i))(i))
+       | f'WriteResponseBodies{i}' >> beam.io.WriteToBigQuery(
+              get_bigquery_uri(self.known_args.input, 'response_bodies'),
+              schema='page:STRING, url:STRING, body:STRING, truncated:BOOLEAN',
+              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+
 
 def run(argv=None):
   """Constructs and runs the BigQuery import pipeline."""
@@ -345,7 +398,8 @@ def run(argv=None):
   pipeline_options.view_as(SetupOptions).save_main_session = True
 
 
-  with beam.Pipeline(options=pipeline_options) as p:
+  def create_pipeline():
+    p = beam.Pipeline(options=pipeline_options)
     gcs_dir = get_gcs_dir(known_args.input)
 
     hars = (p
@@ -353,50 +407,14 @@ def run(argv=None):
       | beam.io.ReadAllFromText()
       | 'MapJSON' >> beam.Map(from_json))
 
-    for i in range(NUM_PARTITIONS):
-      (hars
-        | f'MapPages{i}' >> beam.FlatMap(
-          (lambda i: lambda har: partition_step(get_page, har, i))(i))
-        | f'WritePages{i}' >> beam.io.WriteToBigQuery(
-          get_bigquery_uri(known_args.input, 'pages'),
-          schema='url:STRING, payload:STRING',
-          write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-          create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+    hars | WriteBigQuery(known_args)
 
-      (hars
-        | f'MapTechnologies{i}' >> beam.FlatMap(
-          (lambda i: lambda har: partition_step(get_technologies, har, i))(i))
-        | f'WriteTechnologies{i}' >> beam.io.WriteToBigQuery(
-          get_bigquery_uri(known_args.input, 'technologies'),
-          schema='url:STRING, category:STRING, app:STRING, info:STRING',
-          write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-          create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+    return p
 
-      (hars
-        | f'MapLighthouseReports{i}' >> beam.FlatMap(
-          (lambda i: lambda har: partition_step(get_lighthouse_reports, har, i))(i))
-        | f'WriteLighthouseReports{i}' >> beam.io.WriteToBigQuery(
-          get_bigquery_uri(known_args.input, 'lighthouse'),
-          schema='url:STRING, report:STRING',
-          write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-          create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
-      (hars
-        | f'MapRequests{i}' >> beam.FlatMap(
-          (lambda i: lambda har: partition_step(get_requests, har, i))(i))
-        | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
-          get_bigquery_uri(known_args.input, 'requests'),
-          schema='page:STRING, url:STRING, payload:STRING',
-          write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-          create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
-
-      (hars
-        | f'MapResponseBodies{i}' >> beam.FlatMap(
-          (lambda i: lambda har: partition_step(get_response_bodies, har, i))(i))
-        | f'WriteResponseBodies{i}' >> beam.io.WriteToBigQuery(
-          get_bigquery_uri(known_args.input, 'response_bodies'),
-          schema='page:STRING, url:STRING, body:STRING, truncated:BOOLEAN',
-          write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-          create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+  p = create_pipeline()
+  pipeline_result = p.run()
+  if not isinstance(p.runner, DataflowRunner):
+      pipeline_result.wait_until_finish()
 
 
 if __name__ == '__main__':
