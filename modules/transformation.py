@@ -106,7 +106,7 @@ def initialize_status_info(file_name, page):
     }
 
 
-class ImportHarJson(beam.DoFn):
+class HarJsonToSummary(beam.DoFn):
     def process(self, element, **kwargs):
         file_name, data = element
         try:
@@ -142,21 +142,21 @@ class ImportHarJson(beam.DoFn):
         status_info = initialize_status_info(file_name, pages[0])
 
         try:
-            page = ImportHarJson.import_page(pages[0], status_info)
+            page = HarJsonToSummary.import_page(pages[0], status_info)
         except Exception:
             logging.warning(
                 f"import_page() failed for status_info:{status_info}", exc_info=True
             )
             return None, None
 
-        entries, first_url, first_html_url = ImportHarJson.import_entries(
+        entries, first_url, first_html_url = HarJsonToSummary.import_entries(
             log["entries"], status_info
         )
         if not entries:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
             return None, None
         else:
-            agg_stats = ImportHarJson.aggregate_stats(
+            agg_stats = HarJsonToSummary.aggregate_stats(
                 entries, first_url, first_html_url, status_info
             )
             if not agg_stats:

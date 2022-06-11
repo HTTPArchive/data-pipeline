@@ -7,7 +7,7 @@ from apache_beam.options.pipeline_options import PipelineOptions, StandardOption
 from apache_beam.runners import DataflowRunner
 
 from modules import constants, utils
-from modules.transformation import ImportHarJson, ReadHarFiles, WriteBigQuery
+from modules.transformation import HarJsonToSummary, ReadHarFiles, WriteBigQuery
 
 
 def parse_args(argv):
@@ -88,7 +88,7 @@ def create_pipeline(argv=None):
     parsed = (
         p
         | ReadHarFiles(known_args.subscription, known_args.input)
-        | "ParseHar" >> beam.ParDo(ImportHarJson()).with_outputs("page", "requests")
+        | "ParseHar" >> beam.ParDo(HarJsonToSummary()).with_outputs("page", "requests")
     )
     pages, requests = parsed
     requests = requests | "FlattenRequests" >> beam.FlatMap(lambda elements: elements)
