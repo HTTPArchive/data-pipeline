@@ -333,6 +333,7 @@ def get_bigquery_uri(release, dataset):
 
   return 'httparchive:%s.%s_%s' % (dataset, date_string, client)
 
+
 class WriteBigQuery(beam.PTransform):
 
   def __init__(self, known_args, label=None):
@@ -386,17 +387,23 @@ class WriteBigQuery(beam.PTransform):
               create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
 
 
+class NonSummaryPipelineOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        super()._add_argparse_args(parser)
+        parser.add_argument(
+            '--input',
+            required=True,
+            help='Input Cloud Storage directory to process.')
+
+
 def run(argv=None):
   """Constructs and runs the BigQuery import pipeline."""
   parser = argparse.ArgumentParser()
-  parser.add_argument(
-      '--input',
-      required=True,
-      help='Input Cloud Storage directory to process.')
   known_args, pipeline_args = parser.parse_known_args(argv)
   pipeline_options = PipelineOptions(pipeline_args)
   pipeline_options.view_as(SetupOptions).save_main_session = True
-
+  known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
 
   def create_pipeline():
     p = beam.Pipeline(options=pipeline_options)
