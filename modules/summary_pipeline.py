@@ -10,7 +10,7 @@ from modules import constants, utils
 from modules.transformation import ReadHarFiles, WriteBigQuery, HarJsonToSummaryDoFn
 
 
-class _WriteToBigQuery(beam.PTransform):
+class WriteBigQuery(beam.PTransform):
     def __init__(self, known_args, standard_options, label=None):
         super().__init__(label)
         self.known_args = known_args
@@ -159,7 +159,7 @@ def create_pipeline(argv=None):
     (p
      | ReadHarFiles(known_args.subscription, known_args.input)
      | "ParseHar" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
-     | _WriteToBigQuery(known_args, standard_options)
+     | WriteBigQuery(known_args, standard_options)
      )
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
