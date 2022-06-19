@@ -142,6 +142,13 @@ def parse_header(input_headers, standard_headers, cookie_key, output_headers=Non
     return output_headers, ret_other, cookie_size
 
 
+def date_and_client_from_file_name(file_name):
+    dir_name, base_name = os.path.split(file_name)
+    date = crawl_date(dir_name)
+    client = client_name(file_name)
+    return date, client
+
+
 def client_name(file_name):
     dir_name, base_name = os.path.split(file_name)
     client = dir_name.split("/")[-1].split("-")[0]
@@ -154,15 +161,11 @@ def client_name(file_name):
         return client.lower()
 
 
-def format_table_name(row, table, const=constants.bigquery):
-    table_name = "{}.{}_{}".format(
-        const["datasets"][table], row["date"], row["client"]
-    )
-
-    if not table_name:
-        logging.error(f"Unable to determine full table name. table={table},row={row}")
-
-    return table_name
+def format_table_name(row, table):
+    try:
+        return f"{table}.{row['date']}_{row['client']}"
+    except:
+        logging.exception(f"Unable to determine full table name. {table=},{row=}")
 
 
 def datetime_to_epoch(dt, status_info):
@@ -211,3 +214,7 @@ def is_home_page(element):
     else:
         # legacy crawl data is all home-page only (i.e. no secondary pages)
         return True
+
+
+def title_case_beam_transform_name(name):
+    return name.replace('_', ' ').title().replace(' ', '')

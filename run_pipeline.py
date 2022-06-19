@@ -1,7 +1,7 @@
 import logging
 
-from modules import import_har
+from modules import summary_pipeline
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
-    import_har.run()
+    summary_pipeline.run()

@@ -33,6 +33,7 @@ class ReadHarFiles(beam.PTransform):
         else:
             matching = (
                 self.input if self.input.endswith(".har.gz") else f"{self.input}/*.har.gz"
+                # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
             )
 
             # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
@@ -84,33 +85,11 @@ class WriteBigQuery(beam.PTransform):
         )
 
 
-def initialize_status_info(file_name, page):
-    # file name parsing kept for backward compatibility before 2022-03-01
-    dir_name, base_name = os.path.split(file_name)
-
-    date = utils.crawl_date(dir_name)
-
-    metadata = page.get("_metadata", {})
-
-    return {
-        "archive": "All",  # only one value found when porting logic from PHP
-        "label": "{dt:%b} {dt.day} {dt.year}".format(dt=date),
-        "crawlid": metadata.get("crawlid", 0),
-        "wptid": page.get("testID", base_name.split(".")[0]),
-        "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
-        "page": metadata.get("tested_url", ""),
-        "pageid": utils.clamp_integer(metadata["page_id"]) if metadata.get("page_id") else None,
-        "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
-        "date": "{:%Y_%m_%d}".format(date),
-        "client": metadata.get("layout", utils.client_name(file_name)).lower(),
-    }
-
-
-class HarJsonToSummary(beam.DoFn):
+class HarJsonToSummaryDoFn(beam.DoFn):
     def process(self, element, **kwargs):
         file_name, data = element
         try:
-            page, requests = self.generate_pages(file_name, data)
+            page, requests = HarJsonToSummary.generate_pages(file_name, data)
             if page:
                 yield beam.pvalue.TaggedOutput("page", page)
             if requests:
@@ -118,8 +97,32 @@ class HarJsonToSummary(beam.DoFn):
         except Exception:
             logging.exception(
                 f"Unable to unpack HAR, check previous logs for detailed errors. "
-                f"file_name={file_name}, element={element}"
+                f"{file_name=}, {element=}"
             )
+
+
+class HarJsonToSummary:
+    @staticmethod
+    def initialize_status_info(file_name, page):
+        # file name parsing kept for backward compatibility before 2022-03-01
+        dir_name, base_name = os.path.split(file_name)
+
+        date, client_name = utils.date_and_client_from_file_name(file_name)
+
+        metadata = page.get("_metadata", {})
+
+        return {
+            "archive": "All",  # only one value found when porting logic from PHP
+            "label": "{dt:%b} {dt.day} {dt.year}".format(dt=date),
+            "crawlid": metadata.get("crawlid", 0),
+            "wptid": page.get("testID", base_name.split(".")[0]),
+            "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
+            "page": metadata.get("tested_url", ""),
+            "pageid": utils.clamp_integer(metadata["page_id"]) if metadata.get("page_id") else None,
+            "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
+            "date": "{:%Y_%m_%d}".format(date),
+            "client": metadata.get("layout", client_name).lower(),
+        }
 
     @staticmethod
     def generate_pages(file_name, element):
@@ -139,7 +142,7 @@ class HarJsonToSummary(beam.DoFn):
             logging.warning(f"No pages found for: {file_name}")
             return None, None
 
-        status_info = initialize_status_info(file_name, pages[0])
+        status_info = HarJsonToSummary.initialize_status_info(file_name, pages[0])
 
         try:
             page = HarJsonToSummary.import_page(pages[0], status_info)

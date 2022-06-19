@@ -4,17 +4,16 @@ from __future__ import absolute_import
 
 import argparse
 from copy import deepcopy
-from datetime import datetime
 from hashlib import sha256
 import json
 import logging
-import re
 
 import apache_beam as beam
-import apache_beam.io.gcp.gcsio as gcsio
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.runners import DataflowRunner
+
+from modules import utils, constants
 
 
 # BigQuery can handle rows up to 100 MB.
@@ -51,7 +50,9 @@ def get_page(har):
 
   return [{
     'url': url,
-    'payload': payload_json
+    'payload': payload_json,
+    'date': har["date"],
+    'client': har["client"],
   }]
 
 
@@ -67,33 +68,28 @@ def get_page_url(har):
   return page[0].get('url')
 
 
-def partition_step(fn, har, index):
+def partition_step(har, num_partitions):
   """Partitions functions across multiple concurrent steps."""
-
-  logging.info(f'partitioning step {fn}, index {index}')
 
   if not har:
     logging.warning('Unable to partition step, null HAR.')
-    return
+    return 0
 
   page = har.get('log').get('pages')[0]
   metadata = page.get('_metadata')
   if metadata.get('crawl_depth') and metadata.get('crawl_depth') != '0':
     # Only home pages have a crawl depth of 0.
-    return
+    return 0
 
   page_url = get_page_url(har)
 
   if not page_url:
     logging.warning('Skipping HAR: unable to get page URL (see preceding warning).')
-    return
+    return 0
 
   hash = hash_url(page_url)
-  if hash % NUM_PARTITIONS != index:
-    logging.info(f'Skipping partition. {hash} % {NUM_PARTITIONS} != {index}')
-    return
 
-  return fn(har)
+  return hash % num_partitions
 
 
 def get_requests(har):
@@ -132,7 +128,9 @@ def get_requests(har):
     requests.append({
       'page': page_url,
       'url': request_url,
-      'payload': payload
+      'payload': payload,
+      'date': har["date"],
+      'client': har["client"],
     })
 
   return requests
@@ -177,7 +175,9 @@ def get_response_bodies(har):
       'page': page_url,
       'url': request_url,
       'body': body[:MAX_CONTENT_SIZE],
-      'truncated': truncated
+      'truncated': truncated,
+      'date': har["date"],
+      'client': har["client"],
     })
 
   return response_bodies
@@ -221,7 +221,9 @@ def get_technologies(har):
         'url': page_url,
         'category': category,
         'app': app,
-        'info': info
+        'info': info,
+        'date': har["date"],
+        'client': har["client"],
       })
 
   return app_list
@@ -260,7 +262,9 @@ def get_lighthouse_reports(har):
 
   return [{
     'url': page_url,
-    'report': report_json
+    'report': report_json,
+    'date': har["date"],
+    'client': har["client"],
   }]
 
 
@@ -296,11 +300,11 @@ def to_json(obj):
   return json.dumps(obj, separators=(',', ':'), ensure_ascii=False)
 
 
-def from_json(str):
+def from_json(file_name, element):
   """Returns an object from the JSON representation."""
 
   try:
-    return json.loads(str)
+    return file_name, json.loads(element)
   except Exception as e:
     logging.error('Unable to parse JSON object "%s...": %s' % (str[:50], e))
     return
@@ -312,79 +316,94 @@ def get_gcs_dir(release):
   return 'gs://httparchive/crawls/%s/' % release
 
 
-def gcs_list(gcs_dir):
-  """Lists all files in a GCS directory."""
-  gcs = gcsio.GcsIO()
-  return gcs.list_prefix(gcs_dir)
+def add_date_and_client(element):
+  file_name, har = element
+  date, client = utils.date_and_client_from_file_name(file_name)
+  page = har.get('log').get('pages')[0]
+  metadata = page.get('_metadata', {})
+  har.update(
+      {
+          "date": "{:%Y_%m_%d}".format(date),
+          "client": metadata.get("layout", client).lower(),
+      }
+  )
 
-
-def get_bigquery_uri(release, dataset):
-  """Formats a release string into a BigQuery dataset/table."""
-
-  client, date_string = release.split('-')
-
-  if client == 'chrome':
-    client = 'desktop'
-  elif client == 'android':
-    client = 'mobile'
-
-  date_obj = datetime.strptime(date_string, '%b_%d_%Y') # Mar_01_2020
-  date_string = date_obj.strftime('%Y_%m_%d') # 2020_03_01
-
-  return 'httparchive:%s.%s_%s' % (dataset, date_string, client)
+  return har
 
 
 class WriteBigQuery(beam.PTransform):
 
-  def __init__(self, known_args, label=None):
+  def __init__(self, options, label=None):
       super().__init__(label)
-      self.known_args = known_args
+      self.options = options
+
+  @staticmethod
+  def _transform_and_write_partition(pcoll, name, index, fn, table, schema, label=None, **kwargs):
+      return (
+          pcoll
+          | f'Map{utils.title_case_beam_transform_name(name)}{index}' >> beam.FlatMap(fn)
+          | f'Write{utils.title_case_beam_transform_name(name)}{index}' >> beam.io.WriteToBigQuery(
+            table=table,
+            schema=schema,
+            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+            additional_bq_parameters={"ignoreUnknownValues": True},)
+      )
 
   def expand(self, hars):
-    for i in range(NUM_PARTITIONS):
-      (hars
-       | f'MapPages{i}' >> beam.FlatMap(
-              (lambda i: lambda har: partition_step(get_page, har, i))(i))
-       | f'WritePages{i}' >> beam.io.WriteToBigQuery(
-              get_bigquery_uri(self.known_args.input, 'pages'),
-              schema='url:STRING, payload:STRING',
-              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+    partitions = (hars
+                  | beam.Partition(partition_step, NUM_PARTITIONS))
 
-      (hars
-       | f'MapTechnologies{i}' >> beam.FlatMap(
-              (lambda i: lambda har: partition_step(get_technologies, har, i))(i))
-       | f'WriteTechnologies{i}' >> beam.io.WriteToBigQuery(
-              get_bigquery_uri(self.known_args.input, 'technologies'),
-              schema='url:STRING, category:STRING, app:STRING, info:STRING',
-              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+    for idx, part in enumerate(partitions, 1):
+        self._transform_and_write_partition(
+            pcoll=part,
+            name="pages",
+            index=idx,
+            fn=get_page,
+            table=lambda row: utils.format_table_name(
+                row, self.options.dataset_pages
+            ),
+            schema=constants.bigquery["schemas"]["pages"],)
 
-      (hars
-       | f'MapLighthouseReports{i}' >> beam.FlatMap(
-              (lambda i: lambda har: partition_step(get_lighthouse_reports, har, i))(i))
-       | f'WriteLighthouseReports{i}' >> beam.io.WriteToBigQuery(
-              get_bigquery_uri(self.known_args.input, 'lighthouse'),
-              schema='url:STRING, report:STRING',
-              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
-      (hars
-       | f'MapRequests{i}' >> beam.FlatMap(
-              (lambda i: lambda har: partition_step(get_requests, har, i))(i))
-       | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
-              get_bigquery_uri(self.known_args.input, 'requests'),
-              schema='page:STRING, url:STRING, payload:STRING',
-              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+        self._transform_and_write_partition(
+            pcoll=part,
+            name="technologies",
+            index=idx,
+            fn=get_technologies,
+            table=lambda row: utils.format_table_name(
+                row, self.options.dataset_technologies
+            ),
+            schema=constants.bigquery["schemas"]["technologies"],)
 
-      (hars
-       | f'MapResponseBodies{i}' >> beam.FlatMap(
-              (lambda i: lambda har: partition_step(get_response_bodies, har, i))(i))
-       | f'WriteResponseBodies{i}' >> beam.io.WriteToBigQuery(
-              get_bigquery_uri(self.known_args.input, 'response_bodies'),
-              schema='page:STRING, url:STRING, body:STRING, truncated:BOOLEAN',
-              write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-              create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))
+        self._transform_and_write_partition(
+            pcoll=part,
+            name="lighthouse",
+            index=idx,
+            fn=get_lighthouse_reports,
+            table=lambda row: utils.format_table_name(
+                row, self.options.dataset_lighthouse
+            ),
+            schema=constants.bigquery["schemas"]["lighthouse"],)
+
+        self._transform_and_write_partition(
+            pcoll=part,
+            name="requests",
+            index=idx,
+            fn=get_requests,
+            table=lambda row: utils.format_table_name(
+                row, self.options.dataset_requests
+            ),
+            schema=constants.bigquery["schemas"]["requests"],)
+
+        self._transform_and_write_partition(
+            pcoll=part,
+            name="response_bodies",
+            index=idx,
+            fn=get_response_bodies,
+            table=lambda row: utils.format_table_name(
+                row, self.options.dataset_response_bodies
+            ),
+            schema=constants.bigquery["schemas"]["response_bodies"],)
 
 
 class NonSummaryPipelineOptions(PipelineOptions):
@@ -392,38 +411,67 @@ class NonSummaryPipelineOptions(PipelineOptions):
     def _add_argparse_args(cls, parser):
         super()._add_argparse_args(parser)
         parser.add_argument(
-            '--input',
-            required=True,
+            '--input_non_summary',
+            dest="input",
+            # required=True,
             help='Input Cloud Storage directory to process.')
 
+        parser.add_argument(
+            '--dataset_pages',
+            help="BigQuery dataset to write pages table",
+            default=constants.bigquery["datasets"]["pages"]
+        )
+        parser.add_argument(
+            '--dataset_technologies',
+            help="BigQuery dataset to write technologies table",
+            default=constants.bigquery["datasets"]["technologies"]
+        )
+        parser.add_argument(
+            '--dataset_lighthouse',
+            help="BigQuery dataset to write lighthouse table",
+            default=constants.bigquery["datasets"]["lighthouse"]
+        )
+        parser.add_argument(
+            '--dataset_requests',
+            help="BigQuery dataset to write requests table",
+            default=constants.bigquery["datasets"]["requests"]
+        )
+        parser.add_argument(
+            '--dataset_response_bodies',
+            help="BigQuery dataset to write response_bodies table",
+            default=constants.bigquery["datasets"]["response_bodies"]
+        )
 
-def run(argv=None):
-  """Constructs and runs the BigQuery import pipeline."""
-  parser = argparse.ArgumentParser()
-  known_args, pipeline_args = parser.parse_known_args(argv)
-  pipeline_options = PipelineOptions(pipeline_args)
-  pipeline_options.view_as(SetupOptions).save_main_session = True
-  known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
 
-  def create_pipeline():
+def create_pipeline(argv=None):
+    """Constructs and runs the BigQuery import pipeline."""
+    parser = argparse.ArgumentParser()
+    known_args, pipeline_args = parser.parse_known_args(argv)
+    pipeline_options = PipelineOptions(pipeline_args)
+    pipeline_options.view_as(SetupOptions).save_main_session = True
+    known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
+
     p = beam.Pipeline(options=pipeline_options)
     gcs_dir = get_gcs_dir(known_args.input)
 
-    hars = (p
-      | beam.Create([gcs_dir])
-      | beam.io.ReadAllFromText()
-      | 'MapJSON' >> beam.Map(from_json))
-
-    hars | WriteBigQuery(known_args)
+    (p
+     | beam.Create([gcs_dir])
+     | beam.io.ReadAllFromText(with_filename=True)
+     | 'MapJSON' >> beam.MapTuple(from_json)
+     | "AddDateAndClient" >> beam.Map(add_date_and_client)
+     | WriteBigQuery(known_args)
+     )
 
     return p
 
+
+def run(argv=None):
+  logging.getLogger().setLevel(logging.INFO)
   p = create_pipeline()
-  pipeline_result = p.run()
+  pipeline_result = p.run(argv)
   if not isinstance(p.runner, DataflowRunner):
       pipeline_result.wait_until_finish()
 
 
 if __name__ == '__main__':
-  logging.getLogger().setLevel(logging.INFO)
   run()

@@ -7,7 +7,7 @@ from apache_beam.options.pipeline_options import PipelineOptions, StandardOption
 from apache_beam.runners import DataflowRunner
 
 from modules import constants, utils
-from modules.transformation import HarJsonToSummary, ReadHarFiles, WriteBigQuery
+from modules.transformation import ReadHarFiles, WriteBigQuery, HarJsonToSummaryDoFn
 
 
 class _WriteToBigQuery(beam.PTransform):
@@ -29,7 +29,7 @@ class _WriteToBigQuery(beam.PTransform):
             table=lambda row: utils.format_table_name(
                 row, self.known_args.dataset_summary_pages
             ),
-            schema=constants.bigquery["schemas"]["pages"],
+            schema=constants.bigquery["schemas"]["summary_pages"],
             streaming=self.standard_options.streaming,
             method=self.known_args.big_query_write_method,
         )
@@ -40,7 +40,7 @@ class _WriteToBigQuery(beam.PTransform):
             table=lambda row: utils.format_table_name(
                 row, self.known_args.dataset_summary_requests
             ),
-            schema=constants.bigquery["schemas"]["requests"],
+            schema=constants.bigquery["schemas"]["summary_requests"],
             streaming=self.standard_options.streaming,
             method=self.known_args.big_query_write_method,
         )
@@ -51,7 +51,7 @@ class _WriteToBigQuery(beam.PTransform):
             table=lambda row: utils.format_table_name(
                 row, self.known_args.dataset_summary_pages_home_only
             ),
-            schema=constants.bigquery["schemas"]["pages"],
+            schema=constants.bigquery["schemas"]["summary_pages"],
             streaming=self.standard_options.streaming,
             method=self.known_args.big_query_write_method,
         )
@@ -62,7 +62,7 @@ class _WriteToBigQuery(beam.PTransform):
             table=lambda row: utils.format_table_name(
                 row, self.known_args.dataset_summary_requests_home_only
             ),
-            schema=constants.bigquery["schemas"]["requests"],
+            schema=constants.bigquery["schemas"]["summary_requests"],
             streaming=self.standard_options.streaming,
             method=self.known_args.big_query_write_method,
         )
@@ -71,7 +71,7 @@ class _WriteToBigQuery(beam.PTransform):
         if self.standard_options.streaming:
             for name, transform in deadletter_queues.items():
                 transform_name = (
-                    f"Print{name.replace('_', ' ').title().replace(' ', '')}Errors"
+                    f"Print{utils.title_case_beam_transform_name(name)}Errors"
                 )
                 transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
                     lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
@@ -85,7 +85,7 @@ class SummaryPipelineOptions(PipelineOptions):
         super()._add_argparse_args(parser)
 
         parser.add_argument(
-            "--input",
+            "--input_summary",
             dest="input",
             help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022",
         )
@@ -112,38 +112,38 @@ class SummaryPipelineOptions(PipelineOptions):
             "--dataset_summary_pages",
             dest="dataset_summary_pages",
             help="BigQuery dataset to write summary pages tables",
-            default=constants.bigquery["datasets"]["pages"],
+            default=constants.bigquery["datasets"]["summary_pages_all"],
         )
 
         parser.add_argument(
             "--dataset_summary_requests",
             dest="dataset_summary_requests",
             help="BigQuery dataset to write summary requests tables",
-            default=constants.bigquery["datasets"]["requests"],
+            default=constants.bigquery["datasets"]["summary_requests_all"],
         )
 
         parser.add_argument(
             "--dataset_summary_pages_home_only",
             dest="dataset_summary_pages_home_only",
             help="BigQuery dataset to write summary pages tables (home-page-only)",
-            default=constants.bigquery["datasets"]["home_pages"],
+            default=constants.bigquery["datasets"]["summary_pages_home"],
         )
 
         parser.add_argument(
             "--dataset_summary_requests_home_only",
             dest="dataset_summary_requests_home_only",
             help="BigQuery dataset to write summary requests tables (home-page-only)",
-            default=constants.bigquery["datasets"]["home_requests"],
+            default=constants.bigquery["datasets"]["summary_requests_home"],
         )
 
 
 def create_pipeline(argv=None):
     parser = argparse.ArgumentParser()
     known_args, pipeline_args = parser.parse_known_args(argv)
-    logging.info(f"Pipeline Options: known_args={known_args},pipeline_args={pipeline_args}")
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     standard_options = pipeline_options.view_as(StandardOptions)
     known_args = pipeline_options.view_as(SummaryPipelineOptions)
+    logging.info(f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options},{standard_options}")
     if not (known_args.subscription or known_args.input):
         raise RuntimeError(
             "Either one of --input or --subscription options must be provided"
@@ -156,13 +156,11 @@ def create_pipeline(argv=None):
 
     p = beam.Pipeline(options=pipeline_options)
 
-    parsed = (
-        p
-        | ReadHarFiles(known_args.subscription, known_args.input)
-        | "ParseHar" >> beam.ParDo(HarJsonToSummary()).with_outputs("page", "requests")
-    )
-
-    parsed | _WriteToBigQuery(known_args, standard_options)
+    (p
+     | ReadHarFiles(known_args.subscription, known_args.input)
+     | "ParseHar" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
+     | _WriteToBigQuery(known_args, standard_options)
+     )
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
 

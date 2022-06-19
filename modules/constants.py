@@ -4,22 +4,32 @@ import json
 # TODO remove 'experimental' before going live
 bigquery = {
     "datasets": {
-        "pages": "httparchive:experimental_summary_pages",
-        "requests": "httparchive:experimental_summary_requests",
-        "home_pages": "httparchive:summary_pages",
-        "home_requests": "httparchive:summary_requests",
+        "summary_pages_all": "httparchive:experimental_summary_pages",
+        "summary_requests_all": "httparchive:experimental_summary_requests",
+        "summary_pages_home": "httparchive:summary_pages",
+        "summary_requests_home": "httparchive:summary_requests",
+        "pages": "httparchive:pages",
+        "technologies": "httparchive:technologies",
+        "lighthouse": "httparchive:lighthouse",
+        "requests": "httparchive:requests",
+        "response_bodies": "httparchive:response_bodies",
     },
     "schemas": {
-        "pages": {
+        "summary_pages": {
             "fields": json.loads(
                 pkg_resources.read_text("schema", "summary_pages.json")
             )
         },
-        "requests": {
+        "summary_requests": {
             "fields": json.loads(
                 pkg_resources.read_text("schema", "summary_requests.json")
             )
         },
+        "pages": "url:STRING, payload:STRING",
+        "technologies": "url:STRING, category:STRING, app:STRING, info:STRING",
+        "lighthouse": "url:STRING, report:STRING",
+        "requests": "page:STRING, url:STRING, payload:STRING",
+        "response_bodies": "page:STRING, url:STRING, body:STRING, truncated:BOOLEAN",
     },
 }
 
