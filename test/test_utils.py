@@ -152,9 +152,9 @@ class Test(TestCase):
             self.assertIn("Clamping required for {'b': " + str(b), log.output[0])
 
     def test_format_table_name(self):
-        constant = {"datasets": {"table_type": "project_name:dataset_name"}}
+        project_dataset = "project_name:dataset_name"
         row = {"date": "2022-01-01", "client": "test"}
         self.assertEqual(
-            utils.format_table_name(row, "table_type", constant),
-            f"{constant['datasets']['table_type']}.{row['date']}_{row['client']}",
+            utils.format_table_name(row, project_dataset),
+            f"{project_dataset}.{row['date']}_{row['client']}",
         )

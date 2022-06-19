@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from modules.transformation import HarJsonToSummary
+from modules.transformation import HarJsonToSummary, HarJsonToSummaryDoFn
 
 
 class TestImportHarJson(TestCase):
@@ -33,4 +33,4 @@ class TestImportHarJson(TestCase):
 
     def test_import_har_json_bad_data(self):
         with self.assertRaises(StopIteration):
-            next(HarJsonToSummary().process(("file_name", "data")))
+            next(HarJsonToSummaryDoFn().process(("file_name", "data")))
