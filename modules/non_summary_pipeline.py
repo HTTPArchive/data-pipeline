@@ -11,7 +11,6 @@ from hashlib import sha256
 import apache_beam as beam
 from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
-from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.runners import DataflowRunner
 
 from modules import utils, constants, transformation
@@ -310,12 +309,6 @@ def from_json(file_name, element):
     return
 
 
-def get_gcs_dir(release):
-  """Formats a release string into a gs:// directory."""
-
-  return 'gs://httparchive/crawls/%s/' % release
-
-
 def add_date_and_client(element):
   """Adds `date` and `client` attributes to facalitate BigQuery table routing"""
 
@@ -333,10 +326,12 @@ def add_date_and_client(element):
   return har
 
 
-class WriteBigQuery(beam.PTransform):
+class WriteNonSummaryToBigQuery(beam.PTransform):
 
   def __init__(self, options, label=None):
-      super().__init__(label)
+      # TODO(BEAM-6158): Revert the workaround once we can pickle super() on py3.
+      # super().__init__(label)
+      beam.PTransform.__init__(self)
       self.non_summary_options = options.view_as(NonSummaryPipelineOptions)
       self.standard_options = options.view_as(StandardOptions)
 
@@ -460,19 +455,17 @@ def create_pipeline(argv=None):
     """Constructs and runs the BigQuery import pipeline."""
     parser = argparse.ArgumentParser()
     known_args, pipeline_args = parser.parse_known_args(argv)
-    pipeline_options = PipelineOptions(pipeline_args)
-    pipeline_options.view_as(SetupOptions).save_main_session = True
+    pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
 
     p = beam.Pipeline(options=pipeline_options)
-    gcs_dir = get_gcs_dir(known_args.input)
 
     (p
-     | beam.Create([gcs_dir])
+     | beam.Create([known_args.input])
      | beam.io.ReadAllFromText(with_filename=True)
      | 'MapJSON' >> beam.MapTuple(from_json)
      | "AddDateAndClient" >> beam.Map(add_date_and_client)
-     | WriteBigQuery(pipeline_options)
+     | WriteNonSummaryToBigQuery(pipeline_options)
      )
 
     return p

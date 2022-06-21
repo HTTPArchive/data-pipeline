@@ -2,80 +2,80 @@ import argparse
 import logging
 
 import apache_beam as beam
-from apache_beam.io.gcp.bigquery import BigQueryWriteFn, WriteToBigQuery
+from apache_beam.io.gcp.bigquery import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 from apache_beam.runners import DataflowRunner
 
 from modules import constants, utils
-from modules.transformation import ReadHarFiles, WriteBigQuery, HarJsonToSummaryDoFn
+from modules.transformation import ReadHarFiles, WriteBigQuery, HarJsonToSummaryDoFn, add_deadletter_logging
 
 
-class WriteBigQuery(beam.PTransform):
-    def __init__(self, known_args, standard_options, label=None):
+class WriteSummaryPagesToBigQuery(beam.PTransform):
+    def __init__(self, summary_options, standard_options, label=None):
         super().__init__(label)
-        self.known_args = known_args
+        self.summary_options = summary_options
         self.standard_options = standard_options
 
-    def expand(self, parsed):
-        pages, requests = parsed
+    def expand(self, pages):
+        home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
+
+        deadletter_queues = {
+            "pages": pages | "WritePagesToBigQuery" >> WriteBigQuery(
+                table=lambda row: utils.format_table_name(
+                    row, self.summary_options.dataset_summary_pages
+                ),
+                schema=constants.BIGQUERY["schemas"]["summary_pages"],
+                streaming=self.standard_options.streaming,
+                method=self.summary_options.big_query_write_method,
+            ),
+            "home_pages": home_pages | "WriteHomePagesToBigQuery" >> WriteBigQuery(
+                table=lambda row: utils.format_table_name(
+                    row, self.summary_options.dataset_summary_pages_home_only
+                ),
+                schema=constants.BIGQUERY["schemas"]["summary_pages"],
+                streaming=self.standard_options.streaming,
+                method=self.summary_options.big_query_write_method,
+            )
+        }
+
+        if self.standard_options.streaming:
+            add_deadletter_logging(deadletter_queues)
+
+
+class WriteSummaryRequestsToBigQuery(beam.PTransform):
+    def __init__(self, summary_options, standard_options, label=None):
+        super().__init__(label)
+        self.summary_options = summary_options
+        self.standard_options = standard_options
+
+    def expand(self, requests):
         requests = requests | "FlattenRequests" >> beam.FlatMap(lambda elements: elements)
 
-        home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
         home_requests = requests | "FilterHomeRequests" >> beam.Filter(utils.is_home_page)
 
-        deadletter_queues = {}
-
-        deadletter_queues["pages"] = pages | "WritePagesToBigQuery" >> WriteBigQuery(
-            table=lambda row: utils.format_table_name(
-                row, self.known_args.dataset_summary_pages
+        deadletter_queues = {
+            "requests": requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
+                table=lambda row: utils.format_table_name(
+                    row, self.summary_options.dataset_summary_requests
+                ),
+                schema=constants.BIGQUERY["schemas"]["summary_requests"],
+                streaming=self.standard_options.streaming,
+                method=self.summary_options.big_query_write_method,
             ),
-            schema=constants.bigquery["schemas"]["summary_pages"],
-            streaming=self.standard_options.streaming,
-            method=self.known_args.big_query_write_method,
-        )
+            "home_requests": home_requests | "WriteHomeRequestsToBigQuery" >> WriteBigQuery(
+                table=lambda row: utils.format_table_name(
+                    row, self.summary_options.dataset_summary_requests_home_only
+                ),
+                schema=constants.BIGQUERY["schemas"]["summary_requests"],
+                streaming=self.standard_options.streaming,
+                method=self.summary_options.big_query_write_method,
+            )
+        }
 
-        deadletter_queues[
-            "requests"
-        ] = requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
-            table=lambda row: utils.format_table_name(
-                row, self.known_args.dataset_summary_requests
-            ),
-            schema=constants.bigquery["schemas"]["summary_requests"],
-            streaming=self.standard_options.streaming,
-            method=self.known_args.big_query_write_method,
-        )
-
-        deadletter_queues[
-            "home_pages"
-        ] = home_pages | "WriteHomePagesToBigQuery" >> WriteBigQuery(
-            table=lambda row: utils.format_table_name(
-                row, self.known_args.dataset_summary_pages_home_only
-            ),
-            schema=constants.bigquery["schemas"]["summary_pages"],
-            streaming=self.standard_options.streaming,
-            method=self.known_args.big_query_write_method,
-        )
-
-        deadletter_queues[
-            "home_requests"
-        ] = home_requests | "WriteHomeRequestsToBigQuery" >> WriteBigQuery(
-            table=lambda row: utils.format_table_name(
-                row, self.known_args.dataset_summary_requests_home_only
-            ),
-            schema=constants.bigquery["schemas"]["summary_requests"],
-            streaming=self.standard_options.streaming,
-            method=self.known_args.big_query_write_method,
-        )
-
-        # deadletter logging
         if self.standard_options.streaming:
-            for name, transform in deadletter_queues.items():
-                transform_name = (
-                    f"Print{utils.title_case_beam_transform_name(name)}Errors"
-                )
-                transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
-                    lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
-                )
+            add_deadletter_logging(deadletter_queues)
+
+
 
 
 class SummaryPipelineOptions(PipelineOptions):
@@ -101,7 +101,7 @@ class SummaryPipelineOptions(PipelineOptions):
             WriteToBigQuery.Method.FILE_LOADS,
         ]
         parser.add_argument(
-            "--big_query_write_method",
+            "--big_query_write_method_summary",
             dest="big_query_write_method",
             help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
             choices=bq_write_methods,
@@ -112,28 +112,28 @@ class SummaryPipelineOptions(PipelineOptions):
             "--dataset_summary_pages",
             dest="dataset_summary_pages",
             help="BigQuery dataset to write summary pages tables",
-            default=constants.bigquery["datasets"]["summary_pages_all"],
+            default=constants.BIGQUERY["datasets"]["summary_pages_all"],
         )
 
         parser.add_argument(
             "--dataset_summary_requests",
             dest="dataset_summary_requests",
             help="BigQuery dataset to write summary requests tables",
-            default=constants.bigquery["datasets"]["summary_requests_all"],
+            default=constants.BIGQUERY["datasets"]["summary_requests_all"],
         )
 
         parser.add_argument(
             "--dataset_summary_pages_home_only",
             dest="dataset_summary_pages_home_only",
             help="BigQuery dataset to write summary pages tables (home-page-only)",
-            default=constants.bigquery["datasets"]["summary_pages_home"],
+            default=constants.BIGQUERY["datasets"]["summary_pages_home"],
         )
 
         parser.add_argument(
             "--dataset_summary_requests_home_only",
             dest="dataset_summary_requests_home_only",
             help="BigQuery dataset to write summary requests tables (home-page-only)",
-            default=constants.bigquery["datasets"]["summary_requests_home"],
+            default=constants.BIGQUERY["datasets"]["summary_requests_home"],
         )
 
 
@@ -156,11 +156,12 @@ def create_pipeline(argv=None):
 
     p = beam.Pipeline(options=pipeline_options)
 
-    (p
-     | ReadHarFiles(known_args.subscription, known_args.input)
-     | "ParseHar" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
-     | WriteBigQuery(known_args, standard_options)
-     )
+    pages, requests = (p
+                       | ReadHarFiles(known_args.subscription, known_args.input)
+                       | "ParseHar" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests"))
+
+    pages | WriteSummaryPagesToBigQuery(known_args, standard_options)
+    requests | WriteSummaryRequestsToBigQuery(known_args, standard_options)
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
 

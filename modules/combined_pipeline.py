@@ -36,7 +36,7 @@ def create_pipeline(argv=None):
     (files
      | "MapJSON" >> beam.MapTuple(non_summary_pipeline.from_json)
      | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
-     | "WriteNonSummaryTables" >> non_summary_pipeline.WriteBigQuery(pipeline_options))
+     | "WriteNonSummaryTables" >> non_summary_pipeline.WriteNonSummaryToBigQuery(pipeline_options))
 
     return p
 
