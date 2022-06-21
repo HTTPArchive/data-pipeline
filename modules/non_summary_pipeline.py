@@ -93,9 +93,9 @@ def partition_step(har, num_partitions):
         logging.warning("Skipping HAR: unable to get page URL (see preceding warning).")
         return 0
 
-    hash = hash_url(page_url)
+    _hash = hash_url(page_url)
 
-    return hash % num_partitions
+    return _hash % num_partitions
 
 
 def get_requests(har):
@@ -237,7 +237,7 @@ def get_technologies(har):
             if app is None:
                 app = app_id
             else:
-                info = app_id[len(app) :].strip()
+                info = app_id[len(app):].strip()
             app_list.append(
                 {
                     "url": page_url,
@@ -346,7 +346,7 @@ def from_json(file_name, element):
 
 
 def add_date_and_client(element):
-    """Adds `date` and `client` attributes to facalitate BigQuery table routing"""
+    """Adds `date` and `client` attributes to facilitate BigQuery table routing"""
 
     file_name, har = element
     date, client = utils.date_and_client_from_file_name(file_name)
