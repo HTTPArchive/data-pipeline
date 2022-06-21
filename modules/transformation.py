@@ -6,10 +6,21 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
+from apache_beam.io.gcp.bigquery import BigQueryWriteFn
 from apache_beam.io.gcp.bigquery_tools import RetryStrategy
 from dateutil import parser as date_parser
 
 from modules import constants, utils
+
+
+def add_deadletter_logging(deadletter_queues):
+    for name, transform in deadletter_queues.items():
+        transform_name = (
+            f"Print{utils.title_case_beam_transform_name(name)}Errors"
+        )
+        transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
+            lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
+        )
 
 
 class ReadHarFiles(beam.PTransform):
@@ -181,11 +192,17 @@ class HarJsonToSummary:
         requests = []
         first_url = ""
         first_html_url = ""
+        entry_number = 0
 
         for entry in entries:
+            if entry.get("_number"):
+                entry_number = entry["_number"]
+            else:
+                entry_number += 1
+
 
             ret_request = {
-                "requestid": (status_info["pageid"] << 32) + entry["_number"],
+                "requestid": (status_info["pageid"] << 32) + entry_number,
                 "client": status_info["client"],
                 "date": status_info["date"],
                 "pageid": status_info["pageid"],
@@ -215,7 +232,7 @@ class HarJsonToSummary:
                 request_other_headers,
                 request_cookie_size,
             ) = utils.parse_header(
-                request["headers"], constants.ghReqHeaders, cookie_key="cookie"
+                request["headers"], constants.GH_REQ_HEADERS, cookie_key="cookie"
             )
 
             req_headers_size = (
@@ -288,7 +305,7 @@ class HarJsonToSummary:
                 response_cookie_size,
             ) = utils.parse_header(
                 response["headers"],
-                constants.ghRespHeaders,
+                constants.GH_RESP_HEADERS,
                 cookie_key="set-cookie",
                 output_headers=request_headers,
             )

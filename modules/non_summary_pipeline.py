@@ -3,18 +3,18 @@
 from __future__ import absolute_import
 
 import argparse
-from copy import deepcopy
-from hashlib import sha256
 import json
 import logging
+from copy import deepcopy
+from hashlib import sha256
 
 import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.io import WriteToBigQuery
+from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.runners import DataflowRunner
 
-from modules import utils, constants
-
+from modules import utils, constants, transformation
 
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 2 * 1024 * 1024
@@ -69,7 +69,7 @@ def get_page_url(har):
 
 
 def partition_step(har, num_partitions):
-  """Partitions functions across multiple concurrent steps."""
+  """Returns a partition number based on the hashed HAR page URL"""
 
   if not har:
     logging.warning('Unable to partition step, null HAR.')
@@ -317,6 +317,8 @@ def get_gcs_dir(release):
 
 
 def add_date_and_client(element):
+  """Adds `date` and `client` attributes to facalitate BigQuery table routing"""
+
   file_name, har = element
   date, client = utils.date_and_client_from_file_name(file_name)
   page = har.get('log').get('pages')[0]
@@ -335,19 +337,18 @@ class WriteBigQuery(beam.PTransform):
 
   def __init__(self, options, label=None):
       super().__init__(label)
-      self.options = options
+      self.non_summary_options = options.view_as(NonSummaryPipelineOptions)
+      self.standard_options = options.view_as(StandardOptions)
 
-  @staticmethod
-  def _transform_and_write_partition(pcoll, name, index, fn, table, schema, label=None, **kwargs):
+  def _transform_and_write_partition(self, pcoll, name, index, fn, table, schema):
       return (
           pcoll
           | f'Map{utils.title_case_beam_transform_name(name)}{index}' >> beam.FlatMap(fn)
-          | f'Write{utils.title_case_beam_transform_name(name)}{index}' >> beam.io.WriteToBigQuery(
+          | f'Write{utils.title_case_beam_transform_name(name)}{index}' >> transformation.WriteBigQuery(
             table=table,
             schema=schema,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-            additional_bq_parameters={"ignoreUnknownValues": True},)
+            streaming=self.standard_options.streaming,
+            method=self.non_summary_options.big_query_write_method)
       )
 
   def expand(self, hars):
@@ -361,9 +362,9 @@ class WriteBigQuery(beam.PTransform):
             index=idx,
             fn=get_page,
             table=lambda row: utils.format_table_name(
-                row, self.options.dataset_pages
+                row, self.non_summary_options.dataset_pages
             ),
-            schema=constants.bigquery["schemas"]["pages"],)
+            schema=constants.BIGQUERY["schemas"]["pages"],)
 
         self._transform_and_write_partition(
             pcoll=part,
@@ -371,9 +372,9 @@ class WriteBigQuery(beam.PTransform):
             index=idx,
             fn=get_technologies,
             table=lambda row: utils.format_table_name(
-                row, self.options.dataset_technologies
+                row, self.non_summary_options.dataset_technologies
             ),
-            schema=constants.bigquery["schemas"]["technologies"],)
+            schema=constants.BIGQUERY["schemas"]["technologies"],)
 
         self._transform_and_write_partition(
             pcoll=part,
@@ -381,9 +382,9 @@ class WriteBigQuery(beam.PTransform):
             index=idx,
             fn=get_lighthouse_reports,
             table=lambda row: utils.format_table_name(
-                row, self.options.dataset_lighthouse
+                row, self.non_summary_options.dataset_lighthouse
             ),
-            schema=constants.bigquery["schemas"]["lighthouse"],)
+            schema=constants.BIGQUERY["schemas"]["lighthouse"],)
 
         self._transform_and_write_partition(
             pcoll=part,
@@ -391,9 +392,9 @@ class WriteBigQuery(beam.PTransform):
             index=idx,
             fn=get_requests,
             table=lambda row: utils.format_table_name(
-                row, self.options.dataset_requests
+                row, self.non_summary_options.dataset_requests
             ),
-            schema=constants.bigquery["schemas"]["requests"],)
+            schema=constants.BIGQUERY["schemas"]["requests"],)
 
         self._transform_and_write_partition(
             pcoll=part,
@@ -401,9 +402,9 @@ class WriteBigQuery(beam.PTransform):
             index=idx,
             fn=get_response_bodies,
             table=lambda row: utils.format_table_name(
-                row, self.options.dataset_response_bodies
+                row, self.non_summary_options.dataset_response_bodies
             ),
-            schema=constants.bigquery["schemas"]["response_bodies"],)
+            schema=constants.BIGQUERY["schemas"]["response_bodies"],)
 
 
 class NonSummaryPipelineOptions(PipelineOptions):
@@ -416,30 +417,42 @@ class NonSummaryPipelineOptions(PipelineOptions):
             # required=True,
             help='Input Cloud Storage directory to process.')
 
+        bq_write_methods = [
+            WriteToBigQuery.Method.STREAMING_INSERTS,
+            WriteToBigQuery.Method.FILE_LOADS,
+        ]
+        parser.add_argument(
+            "--big_query_write_method_non_summary",
+            dest="big_query_write_method",
+            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
+            choices=bq_write_methods,
+            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+        )
+
         parser.add_argument(
             '--dataset_pages',
             help="BigQuery dataset to write pages table",
-            default=constants.bigquery["datasets"]["pages"]
+            default=constants.BIGQUERY["datasets"]["pages"]
         )
         parser.add_argument(
             '--dataset_technologies',
             help="BigQuery dataset to write technologies table",
-            default=constants.bigquery["datasets"]["technologies"]
+            default=constants.BIGQUERY["datasets"]["technologies"]
         )
         parser.add_argument(
             '--dataset_lighthouse',
             help="BigQuery dataset to write lighthouse table",
-            default=constants.bigquery["datasets"]["lighthouse"]
+            default=constants.BIGQUERY["datasets"]["lighthouse"]
         )
         parser.add_argument(
             '--dataset_requests',
             help="BigQuery dataset to write requests table",
-            default=constants.bigquery["datasets"]["requests"]
+            default=constants.BIGQUERY["datasets"]["requests"]
         )
         parser.add_argument(
             '--dataset_response_bodies',
             help="BigQuery dataset to write response_bodies table",
-            default=constants.bigquery["datasets"]["response_bodies"]
+            default=constants.BIGQUERY["datasets"]["response_bodies"]
         )
 
 
@@ -459,7 +472,7 @@ def create_pipeline(argv=None):
      | beam.io.ReadAllFromText(with_filename=True)
      | 'MapJSON' >> beam.MapTuple(from_json)
      | "AddDateAndClient" >> beam.Map(add_date_and_client)
-     | WriteBigQuery(known_args)
+     | WriteBigQuery(pipeline_options)
      )
 
     return p

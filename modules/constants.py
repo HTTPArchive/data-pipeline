@@ -1,8 +1,13 @@
 import importlib.resources as pkg_resources
 import json
 
+
+def _get_schema(path):
+    return json.loads(pkg_resources.read_text("schema", path))
+
+
 # TODO remove 'experimental' before going live
-bigquery = {
+BIGQUERY = {
     "datasets": {
         "summary_pages_all": "httparchive:experimental_summary_pages",
         "summary_requests_all": "httparchive:experimental_summary_requests",
@@ -16,25 +21,32 @@ bigquery = {
     },
     "schemas": {
         "summary_pages": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "summary_pages.json")
-            )
+            "fields": _get_schema("summary_pages.json")
         },
         "summary_requests": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "summary_requests.json")
-            )
+            "fields": _get_schema("summary_requests.json")
         },
-        "pages": "url:STRING, payload:STRING",
-        "technologies": "url:STRING, category:STRING, app:STRING, info:STRING",
-        "lighthouse": "url:STRING, report:STRING",
-        "requests": "page:STRING, url:STRING, payload:STRING",
-        "response_bodies": "page:STRING, url:STRING, body:STRING, truncated:BOOLEAN",
+        "pages": {
+            "fields": _get_schema("pages.json")
+        },
+        "technologies": {
+            "fields": _get_schema("technologies.json")
+        },
+        "lighthouse": {
+            "fields": _get_schema("lighthouse.json")
+        },
+        "requests": {
+            "fields": _get_schema("requests.json")
+        },
+        "response_bodies": {
+            "fields": _get_schema("response_bodies.json")
+        },
     },
+
 }
 
 # mapping of headers to DB fields
-ghReqHeaders = {
+GH_REQ_HEADERS = {
     "accept": "req_accept",
     "accept-charset": "req_accept_charset",
     "accept-encoding": "req_accept_encoding",
@@ -46,7 +58,7 @@ ghReqHeaders = {
     "referer": "req_referer",
     "user-agent": "req_user_agent",
 }
-ghRespHeaders = {
+GH_RESP_HEADERS = {
     "accept-ranges": "resp_accept_ranges",
     "age": "resp_age",
     "cache-control": "resp_cache_control",

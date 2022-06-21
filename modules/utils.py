@@ -202,7 +202,7 @@ def clamp_integers(data, columns):
 
 
 def int_columns_for_schema(schema_name):
-    schema = constants.bigquery['schemas'][schema_name]['fields']
+    schema = constants.BIGQUERY['schemas'][schema_name]['fields']
     return [field['name'] for field in schema if field['type'] == 'INTEGER']
 
 

@@ -5,8 +5,7 @@ import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 from apache_beam.runners import DataflowRunner
 
-from modules import non_summary_pipeline, summary_pipeline
-from modules.non_summary_pipeline import NonSummaryPipelineOptions
+from modules import summary_pipeline, non_summary_pipeline
 from modules.summary_pipeline import SummaryPipelineOptions
 from modules.transformation import ReadHarFiles, HarJsonToSummaryDoFn
 
@@ -17,9 +16,8 @@ def create_pipeline(argv=None):
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     standard_options = pipeline_options.view_as(StandardOptions)
     summary_options = pipeline_options.view_as(SummaryPipelineOptions)
-    non_summary_options = pipeline_options.view_as(NonSummaryPipelineOptions)
-    logging.info(f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options},{standard_options},"
-                 f"{summary_options},{non_summary_options}")
+    logging.info(f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()},"
+                 f"{standard_options},{summary_options}")
     if not (summary_options.subscription or summary_options.input):
         raise RuntimeError(
             "Either one of --input or --subscription options must be provided"
@@ -29,14 +27,16 @@ def create_pipeline(argv=None):
 
     files = p | ReadHarFiles(summary_options.subscription, summary_options.input)
 
-    (files
-     | "ParseHarToSummary" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
-     | "WriteSummaryTables" >> summary_pipeline.WriteBigQuery(known_args, standard_options))
+    # summary pipeline
+    pages, requests = files | "ParseHarToSummary" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
+    pages | summary_pipeline.WriteSummaryPagesToBigQuery(summary_options, standard_options)
+    requests | summary_pipeline.WriteSummaryRequestsToBigQuery(summary_options, standard_options)
 
+    # non-summary pipeline
     (files
      | "MapJSON" >> beam.MapTuple(non_summary_pipeline.from_json)
      | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
-     | "WriteNonSummaryTables" >> non_summary_pipeline.WriteBigQuery(non_summary_options))
+     | "WriteNonSummaryTables" >> non_summary_pipeline.WriteBigQuery(pipeline_options))
 
     return p
 
