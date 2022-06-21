@@ -200,7 +200,6 @@ class HarJsonToSummary:
             else:
                 entry_number += 1
 
-
             ret_request = {
                 "requestid": (status_info["pageid"] << 32) + entry_number,
                 "client": status_info["client"],

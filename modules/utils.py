@@ -164,7 +164,7 @@ def client_name(file_name):
 def format_table_name(row, table):
     try:
         return f"{table}.{row['date']}_{row['client']}"
-    except:
+    except Exception:
         logging.exception(f"Unable to determine full table name. {table=},{row=}")
 
 
