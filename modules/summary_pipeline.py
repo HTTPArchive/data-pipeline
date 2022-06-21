@@ -76,8 +76,6 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
             add_deadletter_logging(deadletter_queues)
 
 
-
-
 class SummaryPipelineOptions(PipelineOptions):
 
     @classmethod

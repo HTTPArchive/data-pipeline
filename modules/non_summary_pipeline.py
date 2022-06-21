@@ -217,7 +217,7 @@ def get_technologies(har):
         for app_id in apps.split(','):
             app = app_map.get(app_id)
             info = ''
-            if app == None:
+            if app is None:
                 app = app_id
             else:
                 info = app_id[len(app):].strip()
@@ -312,7 +312,7 @@ def from_json(file_name, element):
     try:
         return file_name, json.loads(element)
     except Exception as e:
-        logging.error('Unable to parse JSON object "%s...": %s' % (str[:50], e))
+        logging.error('Unable to parse JSON object "%s...": %s' % (element[:50], e))
         return None
 
 
