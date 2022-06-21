@@ -7,7 +7,12 @@ from apache_beam.options.pipeline_options import PipelineOptions, StandardOption
 from apache_beam.runners import DataflowRunner
 
 from modules import constants, utils
-from modules.transformation import ReadHarFiles, WriteBigQuery, HarJsonToSummaryDoFn, add_deadletter_logging
+from modules.transformation import (
+    ReadHarFiles,
+    WriteBigQuery,
+    HarJsonToSummaryDoFn,
+    add_deadletter_logging,
+)
 
 
 class WriteSummaryPagesToBigQuery(beam.PTransform):
@@ -20,7 +25,9 @@ class WriteSummaryPagesToBigQuery(beam.PTransform):
         home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
 
         deadletter_queues = {
-            "pages": pages | "WritePagesToBigQuery" >> WriteBigQuery(
+            "pages": pages
+            | "WritePagesToBigQuery"
+            >> WriteBigQuery(
                 table=lambda row: utils.format_table_name(
                     row, self.summary_options.dataset_summary_pages
                 ),
@@ -28,14 +35,16 @@ class WriteSummaryPagesToBigQuery(beam.PTransform):
                 streaming=self.standard_options.streaming,
                 method=self.summary_options.big_query_write_method,
             ),
-            "home_pages": home_pages | "WriteHomePagesToBigQuery" >> WriteBigQuery(
+            "home_pages": home_pages
+            | "WriteHomePagesToBigQuery"
+            >> WriteBigQuery(
                 table=lambda row: utils.format_table_name(
                     row, self.summary_options.dataset_summary_pages_home_only
                 ),
                 schema=constants.BIGQUERY["schemas"]["summary_pages"],
                 streaming=self.standard_options.streaming,
                 method=self.summary_options.big_query_write_method,
-            )
+            ),
         }
 
         if self.standard_options.streaming:
@@ -49,12 +58,18 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
         self.standard_options = standard_options
 
     def expand(self, requests):
-        requests = requests | "FlattenRequests" >> beam.FlatMap(lambda elements: elements)
+        requests = requests | "FlattenRequests" >> beam.FlatMap(
+            lambda elements: elements
+        )
 
-        home_requests = requests | "FilterHomeRequests" >> beam.Filter(utils.is_home_page)
+        home_requests = requests | "FilterHomeRequests" >> beam.Filter(
+            utils.is_home_page
+        )
 
         deadletter_queues = {
-            "requests": requests | "WriteRequestsToBigQuery" >> WriteBigQuery(
+            "requests": requests
+            | "WriteRequestsToBigQuery"
+            >> WriteBigQuery(
                 table=lambda row: utils.format_table_name(
                     row, self.summary_options.dataset_summary_requests
                 ),
@@ -62,14 +77,16 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
                 streaming=self.standard_options.streaming,
                 method=self.summary_options.big_query_write_method,
             ),
-            "home_requests": home_requests | "WriteHomeRequestsToBigQuery" >> WriteBigQuery(
+            "home_requests": home_requests
+            | "WriteHomeRequestsToBigQuery"
+            >> WriteBigQuery(
                 table=lambda row: utils.format_table_name(
                     row, self.summary_options.dataset_summary_requests_home_only
                 ),
                 schema=constants.BIGQUERY["schemas"]["summary_requests"],
                 streaming=self.standard_options.streaming,
                 method=self.summary_options.big_query_write_method,
-            )
+            ),
         }
 
         if self.standard_options.streaming:
@@ -77,7 +94,6 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
 
 
 class SummaryPipelineOptions(PipelineOptions):
-
     @classmethod
     def _add_argparse_args(cls, parser):
         super()._add_argparse_args(parser)
@@ -141,7 +157,9 @@ def create_pipeline(argv=None):
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     standard_options = pipeline_options.view_as(StandardOptions)
     known_args = pipeline_options.view_as(SummaryPipelineOptions)
-    logging.info(f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options},{standard_options}")
+    logging.info(
+        f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options},{standard_options}"
+    )
     if not (known_args.subscription or known_args.input):
         raise RuntimeError(
             "Either one of --input or --subscription options must be provided"
@@ -154,9 +172,12 @@ def create_pipeline(argv=None):
 
     p = beam.Pipeline(options=pipeline_options)
 
-    pages, requests = (p
-                       | ReadHarFiles(known_args.subscription, known_args.input)
-                       | "ParseHar" >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests"))
+    pages, requests = (
+        p
+        | ReadHarFiles(known_args.subscription, known_args.input)
+        | "ParseHar"
+        >> beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
+    )
 
     pages | WriteSummaryPagesToBigQuery(known_args, standard_options)
     requests | WriteSummaryRequestsToBigQuery(known_args, standard_options)
@@ -174,5 +195,5 @@ def run(argv=None):
         pipeline_result.wait_until_finish()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()

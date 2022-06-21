@@ -135,20 +135,20 @@ class Test(TestCase):
         self.assertEqual(utils.clamp_integer(-1000), None)
 
     def test_clamp_integer_str(self):
-        self.assertEqual(utils.clamp_integer('1000'), 1000)
+        self.assertEqual(utils.clamp_integer("1000"), 1000)
 
     def test_clamp_integer_bigint(self):
         self.assertEqual(utils.clamp_integer(2**64), utils.BIGQUERY_MAX_INT)
 
     def test_clamp_integers(self):
         b = utils.BIGQUERY_MAX_INT + 10
-        cols = ['a', 'b', 'c', 'd']
-        data = {'a': 1, 'b': b, 'c': None}
+        cols = ["a", "b", "c", "d"]
+        data = {"a": 1, "b": b, "c": None}
         with self.assertLogs(level="WARNING") as log:
             utils.clamp_integers(data, cols)
-            self.assertEqual(data['a'], 1)
-            self.assertEqual(data['b'], utils.BIGQUERY_MAX_INT)
-            self.assertEqual(data['c'], None)
+            self.assertEqual(data["a"], 1)
+            self.assertEqual(data["b"], utils.BIGQUERY_MAX_INT)
+            self.assertEqual(data["c"], None)
             self.assertIn("Clamping required for {'b': " + str(b), log.output[0])
 
     def test_format_table_name(self):

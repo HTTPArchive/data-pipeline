@@ -15,9 +15,7 @@ from modules import constants, utils
 
 def add_deadletter_logging(deadletter_queues):
     for name, transform in deadletter_queues.items():
-        transform_name = (
-            f"Print{utils.title_case_beam_transform_name(name)}Errors"
-        )
+        transform_name = f"Print{utils.title_case_beam_transform_name(name)}Errors"
         transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
             lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
         )
@@ -43,7 +41,9 @@ class ReadHarFiles(beam.PTransform):
         # GCS pipeline
         else:
             matching = (
-                self.input if self.input.endswith(".har.gz") else f"{self.input}/*.har.gz"
+                self.input
+                if self.input.endswith(".har.gz")
+                else f"{self.input}/*.har.gz"
                 # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
             )
 
@@ -129,8 +129,12 @@ class HarJsonToSummary:
             "wptid": page.get("testID", base_name.split(".")[0]),
             "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
             "page": metadata.get("tested_url", ""),
-            "pageid": utils.clamp_integer(metadata["page_id"]) if metadata.get("page_id") else None,
-            "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
+            "pageid": utils.clamp_integer(metadata["page_id"])
+            if metadata.get("page_id")
+            else None,
+            "rank": utils.clamp_integer(metadata["rank"])
+            if metadata.get("rank")
+            else None,
             "date": "{:%Y_%m_%d}".format(date),
             "client": metadata.get("layout", client_name).lower(),
         }
@@ -181,9 +185,9 @@ class HarJsonToSummary:
             else:
                 page.update(agg_stats)
 
-        utils.clamp_integers(page, utils.int_columns_for_schema('pages'))
+        utils.clamp_integers(page, utils.int_columns_for_schema("pages"))
         for entry in entries:
-            utils.clamp_integers(entry, utils.int_columns_for_schema('requests'))
+            utils.clamp_integers(entry, utils.int_columns_for_schema("requests"))
 
         return page, entries
 
@@ -425,9 +429,7 @@ class HarJsonToSummary:
         )
 
         avg_dom_depth = (
-            int(float(page.get("_avg_dom_depth")))
-            if page.get("_avg_dom_depth")
-            else 0
+            int(float(page.get("_avg_dom_depth"))) if page.get("_avg_dom_depth") else 0
         )
 
         return {

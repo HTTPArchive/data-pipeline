@@ -20,29 +20,14 @@ BIGQUERY = {
         "response_bodies": "httparchive:response_bodies",
     },
     "schemas": {
-        "summary_pages": {
-            "fields": _get_schema("summary_pages.json")
-        },
-        "summary_requests": {
-            "fields": _get_schema("summary_requests.json")
-        },
-        "pages": {
-            "fields": _get_schema("pages.json")
-        },
-        "technologies": {
-            "fields": _get_schema("technologies.json")
-        },
-        "lighthouse": {
-            "fields": _get_schema("lighthouse.json")
-        },
-        "requests": {
-            "fields": _get_schema("requests.json")
-        },
-        "response_bodies": {
-            "fields": _get_schema("response_bodies.json")
-        },
+        "summary_pages": {"fields": _get_schema("summary_pages.json")},
+        "summary_requests": {"fields": _get_schema("summary_requests.json")},
+        "pages": {"fields": _get_schema("pages.json")},
+        "technologies": {"fields": _get_schema("technologies.json")},
+        "lighthouse": {"fields": _get_schema("lighthouse.json")},
+        "requests": {"fields": _get_schema("requests.json")},
+        "response_bodies": {"fields": _get_schema("response_bodies.json")},
     },
-
 }
 
 # mapping of headers to DB fields

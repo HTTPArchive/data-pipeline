@@ -7,7 +7,7 @@ import dateutil.parser
 
 from modules import constants
 
-BIGQUERY_MAX_INT = 2 ** 63 - 1
+BIGQUERY_MAX_INT = 2**63 - 1
 
 
 def remove_empty_keys(d):
@@ -202,8 +202,8 @@ def clamp_integers(data, columns):
 
 
 def int_columns_for_schema(schema_name):
-    schema = constants.BIGQUERY['schemas'][schema_name]['fields']
-    return [field['name'] for field in schema if field['type'] == 'INTEGER']
+    schema = constants.BIGQUERY["schemas"][schema_name]["fields"]
+    return [field["name"] for field in schema if field["type"] == "INTEGER"]
 
 
 def is_home_page(element):
@@ -217,4 +217,4 @@ def is_home_page(element):
 
 
 def title_case_beam_transform_name(name):
-    return name.replace('_', ' ').title().replace(' ', '')
+    return name.replace("_", " ").title().replace(" ", "")
