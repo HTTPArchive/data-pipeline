@@ -208,7 +208,7 @@ def get_technologies(har):
     """Parses the technologies from a HAR object."""
 
     if not har:
-        return
+        return None
 
     page = har.get("log").get("pages")[0]
     page_url = page.get("_URL")

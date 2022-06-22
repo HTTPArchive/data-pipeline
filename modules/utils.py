@@ -166,6 +166,7 @@ def format_table_name(row, table):
         return f"{table}.{row['date']}_{row['client']}"
     except Exception:
         logging.exception(f"Unable to determine full table name. {table=},{row=}")
+        raise
 
 
 def datetime_to_epoch(dt, status_info):
