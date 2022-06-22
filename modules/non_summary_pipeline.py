@@ -318,11 +318,11 @@ def to_json(obj):
     Java implementation is the way long numbers are handled.
     A Python-serialized JSON string might look like this:
 
-      "timestamp":1551686646079.9998
+        "timestamp":1551686646079.9998
 
     while the Java-serialized string uses scientific notation:
 
-      "timestamp":1.5516866460799998E12
+        "timestamp":1.5516866460799998E12
 
     Out of a sample of 200 actual request objects, this was
     the only difference between implementations. This can be
