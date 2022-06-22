@@ -112,7 +112,7 @@ Various incompatibilities due to missing features
 * missing dead-letter collections for batch loads
 * fixed vs auto-sharding
 
-#### RuntimeError: VarLong too long.
+#### RuntimeError: VarLong too long
 
 This is a known issue when using the DirectRunner on Windows 10 with the Beam Python SDK
 

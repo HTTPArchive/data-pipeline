@@ -500,7 +500,9 @@ def create_pipeline(argv=None):
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
     if pipeline_options.view_as(StandardOptions).streaming:
-        raise NotImplementedError("Unable to run non-summary pipeline in streaming mode, please use batch instead")
+        raise NotImplementedError(
+            "Unable to run non-summary pipeline in streaming mode, please use batch instead"
+        )
 
     p = beam.Pipeline(options=pipeline_options)
 
