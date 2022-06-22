@@ -451,7 +451,6 @@ class NonSummaryPipelineOptions(PipelineOptions):
         parser.add_argument(
             "--input_non_summary",
             dest="input",
-            # required=True,
             help="Input Cloud Storage directory to process.",
         )
 
@@ -500,6 +499,8 @@ def create_pipeline(argv=None):
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
+    if pipeline_options.view_as(StandardOptions).streaming:
+        raise NotImplementedError("Unable to run non-summary pipeline in streaming mode, please use batch instead")
 
     p = beam.Pipeline(options=pipeline_options)
 

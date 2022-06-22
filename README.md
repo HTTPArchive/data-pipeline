@@ -1,8 +1,10 @@
+
 # data-pipeline
 The new HTTP Archive data pipeline built entirely on GCP
 
 ## Initial setup
 TODO: follow known instructions
+https://beam.apache.org/get-started/quickstart-py/
 
 TODO: python3.8
 
@@ -52,10 +54,22 @@ while IFS= read -r f; do gcloud pubsub topics publish projects/httparchive/topic
 ./run_pipeline_streaming.sh
 ```
 
-### WIP Read from GCS (batch)
+### Read from GCS (batch)
 
 ```shell
 ./run_pipeline_batch.sh
+```
+
+### Pipeline types
+
+By default, running the pipeline will run in "combined" mode to produce summary and non-summary tables.
+This can be controlled using the `--pipeline_type` argument on either batch or streaming.
+
+> ⚠ Note: streaming to non-summary tables is only supported in the combined pipeline currently (i.e. not supported in non-summary-only)
+
+```shell
+# example
+./run_pipeline_batch.sh --pipeline_type=summary
 ```
 
 ## Update the pipeline
@@ -97,6 +111,12 @@ https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
 Various incompatibilities due to missing features
 * missing dead-letter collections for batch loads
 * fixed vs auto-sharding
+
+#### RuntimeError: VarLong too long.
+
+This is a known issue when using the DirectRunner on Windows 10 with the Beam Python SDK
+
+https://issues.apache.org/jira/browse/BEAM-11037
 
 ### Response cache-control max-age
 
