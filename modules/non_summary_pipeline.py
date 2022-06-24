@@ -14,7 +14,7 @@ from apache_beam.options.pipeline_options import PipelineOptions, StandardOption
 from apache_beam.runners import DataflowRunner
 
 from modules import utils, constants, transformation
-from modules.css_parser import parse as parse_css
+from modules.css_parser import CSSParser
 
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 2 * 1024 * 1024
@@ -327,9 +327,18 @@ def get_parsed_css(har):
         if typ != 'css':
             continue
 
+        parsing_options = {
+            'silent': True
+        }
+
         response_body = response.get('text')
+
+        if not response_body:
+            continue
+
         try:
-            ast = parse_css(response_body)
+            parser = CSSParser(response_body, parsing_options)
+            ast = parser.parse()
             css = json.dumps(ast)
         except Exception as e:
             logging.error('Unable to parse CSS at "%s": %s' % (request_url, e))

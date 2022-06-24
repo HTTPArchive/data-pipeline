@@ -8,259 +8,240 @@ import re
 
 COMMENT_PATTERN = re.compile(r'\/\*[^*]*\*+([^/*][^*]*\*+)*\/')
 
-# Positional variables.
-LINE = 1
-COLUMN = 1
 
-CSS = None
+class CSSParser():
+    '''CSS parser.'''
+
+    def __init__(self, css, options=None):
+        self.css = css
+        if options is None:
+            options = {}
+        self.options = options
+
+        # Positional variables.
+        self.line = 1
+        self.column = 1
+        self.errors_list = []
 
 
-def trim(val):
-    '''Collapse all whitespace, then trim.'''
-    if not val:
-        return ''
-
-    val = re.sub(r'\s+', ' ', val)
-    val = re.sub(r'^\s+|\s+$', '', val)
-    return val
+    def parse(self):
+        '''Entrypoint for CSS parsing.'''
+        return self.stylesheet()
 
 
-def parse(css, options=None):
-    '''Entrypoint for CSS parsing.'''
-    global CSS
-    CSS = css
-
-    if options is None:
-        options = {}
-
-    def update_position(val):
-        '''Update LINE and COLUMN based on `str`.'''
-        global LINE
-        global COLUMN
-
+    def update_position(self, val):
+        '''Update line and column based on `val`.'''
         lines = re.findall(r'\n', val)
-        LINE = LINE + len(lines)
+        self.line = self.line + len(lines)
         i = val.rfind('\n')
         if i == -1:
-            COLUMN = COLUMN = len(val)
+            self.column = self.column + len(val)
         else:
-            COLUMN = len(val) - i
+            self.column = len(val) - i
 
 
-    def position():
+    def position(self):
         '''Mark position.'''
         def _(node):
-            whitespace()
+            self.whitespace()
             return node
 
         return _
 
 
-    def whitespace():
+    def whitespace(self):
         '''Parse whitespace.'''
-        match(r'^\s*')
+        self.match(r'^\s*')
 
 
-    def comments(rules):
+    def comments(self, rules):
         '''Parse comments.'''
         rules = rules or []
-        while comment() is not None:
+        while self.comment() is not None:
             pass
         return rules
 
 
-    def comment():
+    def comment(self):
         '''Parse comment.'''
-        global COLUMN, CSS
-
-        pos = position()
-        if not CSS or CSS[0] != '/' or CSS[1] != '*':
+        pos = self.position()
+        if not self.css or self.css[0] != '/' or self.css[1] != '*':
             return None
 
         i = 2
-        while CSS[i] != '' and (CSS[i] != '*' or CSS[i + 1] != '/'):
+        while self.css[i] != '' and (self.css[i] != '*' or self.css[i + 1] != '/'):
             i = i + 1
 
         i = i + 2
 
-        if CSS[i - 1] == '':
-            return error('End of comment missing')
+        if self.css[i - 1] == '':
+            return self.error('End of self.comment missing')
 
-        val = CSS[2:i-2]
-        COLUMN = COLUMN + 2
-        update_position(val)
-        CSS = CSS[i:]
-        COLUMN = COLUMN + 2
+        val = self.css[2:i-2]
+        self.column = self.column + 2
+        self.update_position(val)
+        self.css = self.css[i:]
+        self.column = self.column + 2
 
         return pos({
-            'type': 'comment',
-            comment: val
+            'type': 'self.comment',
+            self.comment: val
         })
 
 
-    def match(pattern):
+    def match(self, pattern):
         '''Match `pattern` and return captures.'''
-        global CSS
-
-        m = re.match(pattern, CSS)
+        m = re.match(pattern, self.css)
         if not m:
             return None
 
         val = m[0]
-        update_position(val)
-        CSS = CSS[len(val):]
+        self.update_position(val)
+        self.css = self.css[len(val):]
         return m
 
 
-    errors_list = []
-    def error(msg):
+    def error(self, msg):
         '''Error `msg`.'''
-        global LINE
-        global COLUMN
+        err = f'{self.line}:{self.column}:{msg}'
 
-        err = f'{LINE}:{COLUMN}:{msg}'
-
-        if options.get('silent'):
-            errors_list.append(err)
+        if self.options.get('silent'):
+            self.errors_list.append(err)
         else:
             raise Exception(err)
 
 
-    def stylesheet():
+    def stylesheet(self):
         '''Parse stylesehet.'''
-        rules_list = rules()
+        rules_list = self.rules()
 
         return {
             'type': 'stylesheet',
             'stylesheet': {
-                'source': options.get('source'),
+                'source': self.options.get('source'),
                 'rules': rules_list,
-                'parsingErrors': errors_list
+                'parsingErrors': self.errors_list
             }
         }
 
 
-    def check_open():
+    def check_open(self):
         '''Opening brace.'''
-        return match(r'^{\s*')
+        return self.match(r'^{\s*')
 
 
-    def check_close():
+    def check_close(self):
         '''Closing brace.'''
-        return match(r'^}')
+        return self.match(r'^}')
 
 
-    def rules():
+    def rules(self):
         '''Parse ruleset.'''
-        global CSS
-
         rules = []
-        whitespace()
-        comments(rules)
+        self.whitespace()
+        self.comments(rules)
 
-        while len(CSS) and CSS[0] != '}' and (node := atrule() or rule()):
+        while len(self.css) and self.css[0] != '}' and (node := self.atrule() or self.rule()):
             if node is not False:
                 rules.append(node)
-                comments(rules)
+                self.comments(rules)
 
         return rules
 
 
-    def rule():
+    def rule(self):
         '''Parse rule.'''
-        pos = position()
-        sel = selector()
+        pos = self.position()
+        sel = self.selector()
 
         if not sel:
-            return error('selector missing')
+            return self.error('selector missing')
 
-        comments([])
+        self.comments([])
 
         return pos({
             'type': 'rule',
             'selectors': sel,
-            'declarations': declarations()
+            'declarations': self.declarations()
         })
 
 
-    def selector():
+    def selector(self):
         '''Parse selector.'''
-        m = match(r'^([^{]+)')
+        m = self.match(r'^([^{]+)')
         if not m:
             return None
 
-        # @fix Remove all comments from selectors
-        # http://ostermiller.org/findcomment.html
+        # @fix Remove all self.comments from selectors
+        # http://ostermiller.org/findself.comment.html
         s = m[0]
-        s = trim(s)
+        s = CSSParser.trim(s)
         s = re.sub(r'\/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*\/+', '', s)
         s = re.sub(r'"(?:\\"|[^"])*"|\'(?:\\\'|[^\'])*', lambda m: re.sub(r',', '\u200C', m[0]), s)
         s_list = re.split(r'\s*(?![^(]*\)),\s*', s)
         return [re.sub('\u200C', ',', s) for s in s_list]
 
 
-    def declarations():
+    def declarations(self):
         '''Parse declarations'''
         decls = []
 
-        if not check_open():
-            return error('missing "{"')
+        if not self.check_open():
+            return self.error('missing "{"')
 
-        comments(decls)
+        self.comments(decls)
 
         # declarations
         decl = None
-        while decl := declaration():
+        while decl := self.declaration():
             if decl is False:
                 continue
             decls.append(decl)
-            comments(decls)
+            self.comments(decls)
 
-        if not check_close():
-            return error('missing "}"')
+        if not self.check_close():
+            return self.error('missing "}"')
 
         return decls
 
 
-    def declaration():
+    def declaration(self):
         '''Parse declaration.'''
-        global COMMENT_PATTERN
-
-        pos = position()
+        pos = self.position()
 
         # prop
-        prop = match(r'^(\*?[-#\/\*\\\w]+(\[[0-9a-z_-]+\])?)\s*')
+        prop = self.match(r'^(\*?[-#\/\*\\\w]+(\[[0-9a-z_-]+\])?)\s*')
         if not prop:
             return None
-        prop = trim(prop[0])
+        prop = CSSParser.trim(prop[0])
 
         # :
-        if not match(r'^:\s*'):
-            return error('property missing ":"')
+        if not self.match(r'^:\s*'):
+            return self.error('property missing ":"\n\n' + prop)
 
         # val
-        val = match(r'^((?:\'(?:\\\'|.)*?\'|"(?:\\"|.)*?"|\([^\)]*?\)|[^};])+)')
+        val = self.match(r'^((?:\'(?:\\\'|.)*?\'|"(?:\\"|.)*?"|\([^\)]*?\)|[^};])+)')
 
         ret = pos({
             'type': 'declaration',
             'property': re.sub(COMMENT_PATTERN, '', prop),
-            'value': re.sub(COMMENT_PATTERN, '', trim(val[0])) if val else ''
+            'value': re.sub(COMMENT_PATTERN, '', CSSParser.trim(val[0])) if val else ''
         })
 
         # ;
-        match(r'^[;\s]*')
+        self.match(r'^[;\s]*')
 
         return ret
 
 
-    def keyframe():
+    def keyframe(self):
         '''Parse keyframe.'''
         vals = []
-        pos = position()
+        pos = self.position()
 
-        while m := match(r'^((\d+\.\d+|\.\d+|\d+)%?|[a-z]+)\s*'):
+        while m := self.match(r'^((\d+\.\d+|\.\d+|\d+)%?|[a-z]+)\s*'):
             vals.append(m[1])
-            match(r'^,\s*')
+            self.match(r'^,\s*')
 
         if len(vals) == 0:
             return None
@@ -268,14 +249,14 @@ def parse(css, options=None):
         return pos({
             'type': 'keyframe',
             'values': vals,
-            'declarations': declarations()
+            'declarations': self.declarations()
         })
 
 
-    def atkeyframes():
+    def atkeyframes(self):
         '''Parse keyframes.'''
-        pos = position()
-        m = match(r'^@([-\w]+)?keyframes\s*')
+        pos = self.position()
+        m = self.match(r'^@([-\w]+)?keyframes\s*')
 
         if not m:
             return None
@@ -283,21 +264,21 @@ def parse(css, options=None):
         vendor = m[1]
 
         # identifier
-        m = match(r'^([-\w]+)\s*')
+        m = self.match(r'^([-\w]+)\s*')
         if not m:
-            return error('@keyframes missing name')
+            return self.error('@keyframes missing name')
         name = m[1]
 
-        if not check_open():
-            return error('@keyframes missing "{"')
+        if not self.check_open():
+            return self.error('@keyframes missing "{"')
 
-        frames = comments([])
-        while frame := keyframe():
+        frames = self.comments([])
+        while frame := self.keyframe():
             frames.append(frame)
-            frames = frames + comments([])
+            frames = frames + self.comments([])
 
-        if not check_close():
-            return error('@keyframes missing "}"')
+        if not self.check_close():
+            return self.error('@keyframes missing "}"')
 
         return pos({
             'type': 'keyframes',
@@ -307,23 +288,23 @@ def parse(css, options=None):
         })
 
 
-    def atsupports():
+    def atsupports(self):
         '''Parse supports.'''
-        pos = position()
-        m = match(r'@supports *([^{]+)')
+        pos = self.position()
+        m = self.match(r'@supports *([^{]+)')
 
         if not m:
             return None
 
-        supports = trim(m[1])
+        supports = CSSParser.trim(m[1])
 
-        if not check_open():
-            return error('@supports missing "{"')
+        if not self.check_open():
+            return self.error('@supports missing "{"')
 
-        style = comments([]) + rules()
+        style = self.comments([]) + self.rules()
 
-        if not check_close():
-            return error('@supports missing "}"')
+        if not self.check_close():
+            return self.error('@supports missing "}"')
 
         return pos({
             'type': 'supports',
@@ -332,21 +313,21 @@ def parse(css, options=None):
         })
 
 
-    def athost():
+    def athost(self):
         '''Parse host.'''
-        pos = position()
-        m = match(r'^@host\s*')
+        pos = self.position()
+        m = self.match(r'^@host\s*')
 
         if not m:
             return None
 
-        if not check_open():
-            return error('@host missing "{"')
+        if not self.check_open():
+            return self.error('@host missing "{"')
 
-        style = comments([]) + rules()
+        style = self.comments([]) + self.rules()
 
-        if not check_close():
-            return error('@host missing "}"')
+        if not self.check_close():
+            return self.error('@host missing "}"')
 
         return pos({
             'type': 'host',
@@ -354,23 +335,23 @@ def parse(css, options=None):
         })
 
 
-    def atmedia():
+    def atmedia(self):
         '''Parse media.'''
-        pos = position()
-        m = match(r'^@media *([^{]+)')
+        pos = self.position()
+        m = self.match(r'^@media *([^{]+)')
 
         if not m:
             return None
 
-        media = trim(m[1])
+        media = CSSParser.trim(m[1])
 
-        if not check_open():
-            return error('@media missing "{"')
+        if not self.check_open():
+            return self.error('@media missing "{"')
 
-        style = comments([]) + rules()
+        style = self.comments([]) + self.rules()
 
-        if not check_close():
-            return error('@media missing "}')
+        if not self.check_close():
+            return self.error('@media missing "}')
 
         return pos({
             'type': 'media',
@@ -379,43 +360,43 @@ def parse(css, options=None):
         })
 
 
-    def atcustommedia():
+    def atcustommedia(self):
         '''Parse custom-media.'''
-        pos = position()
-        m = match(r'^@custom-media\s+(--[^\s]+)\s*([^{;]+);')
+        pos = self.position()
+        m = self.match(r'^@custom-media\s+(--[^\s]+)\s*([^{;]+);')
 
         if not m:
             return None
 
         return pos({
             'type': 'custom-media',
-            'name': trim(m[1]),
-            'media': trim(m[2])
+            'name': CSSParser.trim(m[1]),
+            'media': CSSParser.trim(m[2])
         })
 
 
-    def atpage():
+    def atpage(self):
         '''Parse page media.'''
-        pos = position()
-        m = match(r'^@page *')
+        pos = self.position()
+        m = self.match(r'^@page *')
 
         if not m:
             return None
 
-        sel = selector() or []
+        sel = self.selector() or []
 
-        if not check_open():
-            return error('@page missing "{"')
+        if not self.check_open():
+            return self.error('@page missing "{"')
 
-        decls = comments([])
+        decls = self.comments([])
 
         # declarations
-        while decl := declaration():
+        while decl := self.declaration():
             decls.append(decl)
-            decls = decls + comments([])
+            decls = decls + self.comments([])
 
-        if not check_close():
-            return error('@page missing "}"')
+        if not self.check_close():
+            return self.error('@page missing "}"')
 
         return pos({
             'type': 'page',
@@ -424,24 +405,24 @@ def parse(css, options=None):
         })
 
 
-    def atdocument():
+    def atdocument(self):
         '''Parse document.'''
-        pos = position()
-        m = match(r'^@([-\w]+)?document *([^{]+)')
+        pos = self.position()
+        m = self.match(r'^@([-\w]+)?document *([^{]+)')
 
         if not m:
             return None
 
-        vendor = trim(m[1])
-        doc = trim(m[2])
+        vendor = CSSParser.trim(m[1])
+        doc = CSSParser.trim(m[2])
 
-        if not check_open():
-            return error('@document missing "{"')
+        if not self.check_open():
+            return self.error('@document missing "{"')
 
-        style = comments([]) + rules()
+        style = self.comments([]) + self.rules()
 
-        if not check_close():
-            return error('@document missing "}"')
+        if not self.check_close():
+            return self.error('@document missing "}"')
 
         return pos({
             'type': 'document',
@@ -451,26 +432,26 @@ def parse(css, options=None):
         })
 
 
-    def atfontface():
+    def atfontface(self):
         '''Parse font-face.'''
-        pos = position()
-        m = match(r'^@font-face\s*')
+        pos = self.position()
+        m = self.match(r'^@font-face\s*')
 
         if not m:
             return None
 
-        if not check_open():
-            return error('@font-face missing "{"')
+        if not self.check_open():
+            return self.error('@font-face missing "{"')
 
-        decls = comments([])
+        decls = self.comments([])
 
         # declarations
-        while decl := declaration():
+        while decl := self.declaration():
             decls.append(decl)
-            decls = decls + comments([])
+            decls = decls + self.comments([])
 
-        if not check_close():
-            return error('@font-face missing "}"')
+        if not self.check_close():
+            return self.error('@font-face missing "}"')
 
         return pos({
             'type': 'font-face',
@@ -478,31 +459,31 @@ def parse(css, options=None):
         })
 
 
-    def atproperty():
+    def atproperty(self):
         '''Parse property.'''
-        pos = position()
-        m = match(r'^@property\s*')
+        pos = self.position()
+        m = self.match(r'^@property\s*')
 
         if not m:
             return None
 
-        m = match(r'\s*(--[-\w]+)\s*')
+        m = self.match(r'\s*(--[-\w]+)\s*')
         if not m:
-            return error('@property --property name missing')
-        prop = m[1];
+            return self.error('@property --property name missing')
+        prop = m[1]
 
-        if not check_open():
-            return error('@property missing "{"')
+        if not self.check_open():
+            return self.error('@property missing "{"')
 
-        decls = comments([])
+        decls = self.comments([])
 
         # declarations
-        while decl := declaration():
+        while decl := self.declaration():
             decls.append(decl)
-            decls = decls + comments([])
+            decls = decls + self.comments([])
 
-        if not check_close():
-            return error('@property missing "}"')
+        if not self.check_close():
+            return self.error('@property missing "}"')
 
         return pos({
             'type': 'property',
@@ -511,52 +492,62 @@ def parse(css, options=None):
         })
 
 
-    def _compile_at_rule(name):
+    def parse_at_rule(self, name):
         '''Parse non-block at-rules.'''
         pattern = re.compile(r'^@' + name + r'\s*([^;]+);')
 
-        def _():
-            pos = position()
-            m = match(pattern)
-            if not m:
-                return None
-            ret = {
-                'type': name
-            }
-            ret[name] = trim(m[1])
-            return pos(ret)
-        return _
+        pos = self.position()
+        m = self.match(pattern)
+        if not m:
+            return None
+        ret = {
+            'type': name
+        }
+        ret[name] = CSSParser.trim(m[1])
+        return pos(ret)
 
 
-    # Parse import
-    atimport = _compile_at_rule('import')
-
-    # Parse charset
-    atcharset = _compile_at_rule('charset')
-
-    # Parse namespace
-    atnamespace = _compile_at_rule('namespace')
+    def atimport(self):
+        '''Parse import.'''
+        return self.parse_at_rule('import')
 
 
-    def atrule():
+    def atcharset(self):
+        '''Parse charset.'''
+        return self.parse_at_rule('charset')
+
+
+    def atnamespace(self):
+        '''Parse namespace.'''
+        return self.parse_at_rule('namespace')
+
+
+    def atrule(self):
         '''Parse at rule.'''
-        global CSS
-
-        if CSS[0] != '@':
+        if self.css[0] != '@':
             return None
 
-        return atkeyframes() or \
-            atmedia() or \
-            atcustommedia() or \
-            atsupports() or \
-            atimport() or \
-            atcharset() or \
-            atnamespace() or \
-            atdocument() or \
-            atpage() or \
-            athost() or \
-            atfontface() or \
-            atproperty()
+        return self.atkeyframes() or \
+            self.atmedia() or \
+            self.atcustommedia() or \
+            self.atsupports() or \
+            self.atimport() or \
+            self.atcharset() or \
+            self.atnamespace() or \
+            self.atdocument() or \
+            self.atpage() or \
+            self.athost() or \
+            self.atfontface() or \
+            self.atproperty()
 
 
-    return stylesheet()
+
+    @staticmethod
+    def trim(val):
+        '''Collapse all whitespace, then trim.'''
+        if not val:
+            return ''
+
+        val = re.sub(r'\s+', ' ', val)
+        val = re.sub(r'^\s+|\s+$', '', val)
+        return val
