@@ -1,0 +1,22 @@
+[
+    {
+        "name": "date",
+        "type": "STRING"
+    },
+    {
+        "name": "client",
+        "type": "STRING"
+    },
+    {
+        "name": "page",
+        "type": "STRING"
+    },
+    {
+        "name": "url",
+        "type": "STRING"
+    },
+    {
+        "name": "css",
+        "type": "STRING"
+    }
+]

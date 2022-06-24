@@ -142,6 +142,13 @@ def parse_header(input_headers, standard_headers, cookie_key, output_headers=Non
     return output_headers, ret_other, cookie_size
 
 
+def date_and_client_from_file_name(file_name):
+    dir_name, base_name = os.path.split(file_name)
+    date = crawl_date(dir_name)
+    client = client_name(file_name)
+    return date, client
+
+
 def client_name(file_name):
     dir_name, base_name = os.path.split(file_name)
     client = dir_name.split("/")[-1].split("-")[0]

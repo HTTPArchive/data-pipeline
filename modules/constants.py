@@ -20,6 +20,11 @@ bigquery = {
                 pkg_resources.read_text("schema", "summary_requests.json")
             )
         },
+        "parsed_css": {
+            "fields": json.loads(
+                pkg_resources.read_text("schema", "parsed_css.json")
+            )
+        }
     },
 }
 
