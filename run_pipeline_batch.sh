@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
 python3 run_pipeline.py \
-  --input=gs://httparchive/crawls/android-May_12_2022 \
+  --input=gs://httparchive/crawls/chrome-Jun_9_2022 \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
@@ -10,4 +10,5 @@ python3 run_pipeline.py \
   --setup_file=./setup.py \
   --machine_type=n1-standard-32 \
   --worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd \
-  --noauth_local_webserver
+  --noauth_local_webserver \
+  --max_num_workers=90

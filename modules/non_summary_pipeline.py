@@ -14,6 +14,7 @@ from apache_beam.options.pipeline_options import PipelineOptions, StandardOption
 from apache_beam.runners import DataflowRunner
 
 from modules import utils, constants, transformation
+from modules.css_parser import parse as parse_css
 
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 2 * 1024 * 1024
@@ -82,10 +83,6 @@ def partition_step(har, num_partitions):
         return 0
 
     page = har.get("log").get("pages")[0]
-    metadata = page.get("_metadata")
-    if metadata.get("crawl_depth") and metadata.get("crawl_depth") != "0":
-        # Only home pages have a crawl depth of 0.
-        return 0
 
     page_url = get_page_url(har)
 
@@ -303,6 +300,54 @@ def get_lighthouse_reports(har):
     ]
 
 
+def get_parsed_css(har):
+    """Returns a list of stylesheets contained in the HAR."""
+
+    if not har:
+        return None
+
+    page = har.get('log').get('pages')[0]
+    page_url = page.get('_URL')
+    metadata = page.get('_metadata')
+    is_home_page = utils.is_home_page(har)
+    if metadata:
+        page_url = metadata.get('tested_url', page_url)
+
+    entries = har.get('log').get('entries')
+
+    parsed_css = []
+
+    for request in entries:
+        request_url = request.get('_full_url')
+        response = request.get('response').get('content')
+        mime_type = response.get('mimeType')
+        ext = utils.get_ext(request_url)
+        typ = utils.pretty_type(mime_type, ext)
+
+        if typ != 'css':
+            continue
+
+        response_body = response.get('text')
+        try:
+            ast = parse_css(response_body)
+            css = json.dumps(ast)
+        except Exception as e:
+            logging.error('Unable to parse CSS at "%s": %s' % (request_url, e))
+            continue
+
+        if len(css) > MAX_CONTENT_SIZE:
+            continue
+
+        parsed_css.append({
+            'page': page_url,
+            'is_home_page': is_home_page,
+            'url': request_url,
+            'css': css
+        })
+
+    return parsed_css
+
+
 def to_json(obj):
     """Returns a JSON representation of the object.
 
@@ -388,59 +433,70 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         partitions = hars | beam.Partition(partition_step, NUM_PARTITIONS)
 
         for idx, part in enumerate(partitions, 1):
-            self._transform_and_write_partition(
-                pcoll=part,
-                name="pages",
-                index=idx,
-                fn=get_page,
-                table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_pages
-                ),
-                schema=constants.BIGQUERY["schemas"]["pages"],
-            )
+            # self._transform_and_write_partition(
+            #     pcoll=part,
+            #     name="pages",
+            #     index=idx,
+            #     fn=get_page,
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.non_summary_options.dataset_pages
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["pages"],
+            # )
+
+            # self._transform_and_write_partition(
+            #     pcoll=part,
+            #     name="technologies",
+            #     index=idx,
+            #     fn=get_technologies,
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.non_summary_options.dataset_technologies
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["technologies"],
+            # )
+
+            # self._transform_and_write_partition(
+            #     pcoll=part,
+            #     name="lighthouse",
+            #     index=idx,
+            #     fn=get_lighthouse_reports,
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.non_summary_options.dataset_lighthouse
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["lighthouse"],
+            # )
+
+            # self._transform_and_write_partition(
+            #     pcoll=part,
+            #     name="requests",
+            #     index=idx,
+            #     fn=get_requests,
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.non_summary_options.dataset_requests
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["requests"],
+            # )
+
+            # self._transform_and_write_partition(
+            #     pcoll=part,
+            #     name="response_bodies",
+            #     index=idx,
+            #     fn=get_response_bodies,
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.non_summary_options.dataset_response_bodies
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["response_bodies"],
+            # )
 
             self._transform_and_write_partition(
                 pcoll=part,
-                name="technologies",
+                name="parsed_css",
                 index=idx,
-                fn=get_technologies,
+                fn=get_parsed_css,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_technologies
+                    {'date': '2022_06_01', 'client': 'desktop'}, self.non_summary_options.dataset_parsed_css
                 ),
-                schema=constants.BIGQUERY["schemas"]["technologies"],
-            )
-
-            self._transform_and_write_partition(
-                pcoll=part,
-                name="lighthouse",
-                index=idx,
-                fn=get_lighthouse_reports,
-                table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_lighthouse
-                ),
-                schema=constants.BIGQUERY["schemas"]["lighthouse"],
-            )
-
-            self._transform_and_write_partition(
-                pcoll=part,
-                name="requests",
-                index=idx,
-                fn=get_requests,
-                table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_requests
-                ),
-                schema=constants.BIGQUERY["schemas"]["requests"],
-            )
-
-            self._transform_and_write_partition(
-                pcoll=part,
-                name="response_bodies",
-                index=idx,
-                fn=get_response_bodies,
-                table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_response_bodies
-                ),
-                schema=constants.BIGQUERY["schemas"]["response_bodies"],
+                schema=constants.BIGQUERY["schemas"]["parsed_css"],
             )
 
 
@@ -490,6 +546,11 @@ class NonSummaryPipelineOptions(PipelineOptions):
             "--dataset_response_bodies",
             help="BigQuery dataset to write response_bodies table",
             default=constants.BIGQUERY["datasets"]["response_bodies"],
+        )
+        parser.add_argument(
+            "--dataset_parsed_css",
+            help="BigQuery dataset to write parsed_css table",
+            default=constants.BIGQUERY["datasets"]["parsed_css"],
         )
 
 

@@ -30,15 +30,15 @@ def create_pipeline(argv=None):
     files = p | ReadHarFiles(summary_options.subscription, summary_options.input)
 
     # summary pipeline
-    pages, requests = files | "ParseHarToSummary" >> beam.ParDo(
-        HarJsonToSummaryDoFn()
-    ).with_outputs("page", "requests")
-    pages | summary_pipeline.WriteSummaryPagesToBigQuery(
-        summary_options, standard_options
-    )
-    requests | summary_pipeline.WriteSummaryRequestsToBigQuery(
-        summary_options, standard_options
-    )
+    # pages, requests = files | "ParseHarToSummary" >> beam.ParDo(
+    #     HarJsonToSummaryDoFn()
+    # ).with_outputs("page", "requests")
+    # pages | summary_pipeline.WriteSummaryPagesToBigQuery(
+    #     summary_options, standard_options
+    # )
+    # requests | summary_pipeline.WriteSummaryRequestsToBigQuery(
+    #     summary_options, standard_options
+    # )
 
     # non-summary pipeline
     (
