@@ -385,8 +385,9 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         )
 
     def expand(self, hars):
-        partitions = hars | beam.Partition(partition_step, NUM_PARTITIONS)
+        partitions = hars | beam.Partition(partition_step, self.non_summary_options.partitions)
 
+        # enumerate starting from 1, discarding the 0th elements (failures)
         for idx, part in enumerate(partitions, 1):
             self._transform_and_write_partition(
                 pcoll=part,
@@ -452,6 +453,13 @@ class NonSummaryPipelineOptions(PipelineOptions):
             "--input_non_summary",
             dest="input",
             help="Input Cloud Storage directory to process.",
+        )
+
+        parser.add_argument(
+            "--partitions",
+            dest="partitions",
+            help="Number of partitions to split BigQuery write tasks",
+            default=NUM_PARTITIONS
         )
 
         bq_write_methods = [
