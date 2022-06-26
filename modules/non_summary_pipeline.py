@@ -102,7 +102,9 @@ def partition_step(har, num_partitions):
 
     _hash = hash_url(page_url)
 
-    return _hash % num_partitions
+    offset = 1
+
+    return (_hash % num_partitions) + offset
 
 
 def get_requests(har):
