@@ -19,7 +19,7 @@ from modules.css_parser import CSSParser
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 2 * 1024 * 1024
 # Number of times to partition the requests tables.
-NUM_PARTITIONS = 4
+NUM_PARTITIONS = 16
 
 
 def get_page(har):
@@ -81,8 +81,6 @@ def partition_step(har, num_partitions):
     if not har:
         logging.warning("Unable to partition step, null HAR.")
         return 0
-
-    page = har.get("log").get("pages")[0]
 
     page_url = get_page_url(har)
 
@@ -345,6 +343,7 @@ def get_parsed_css(har):
             continue
 
         if len(css) > MAX_CONTENT_SIZE:
+            logging.warning('Parsed CSS at "%s" exceeds max content size: %s' % (request_url, len(css)))
             continue
 
         parsed_css.append({
@@ -433,7 +432,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             >> transformation.WriteBigQuery(
                 table=table,
                 schema=schema,
-                streaming=self.standard_options.streaming,
+                #streaming=self.standard_options.streaming,
                 method=self.non_summary_options.big_query_write_method,
             )
         )
@@ -528,7 +527,7 @@ class NonSummaryPipelineOptions(PipelineOptions):
             dest="big_query_write_method",
             help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
             choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+            default=WriteToBigQuery.Method.FILE_LOADS,
         )
 
         parser.add_argument(

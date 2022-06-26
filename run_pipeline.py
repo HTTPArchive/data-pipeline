@@ -1,7 +1,7 @@
 import argparse
 import logging
 
-from modules import combined_pipeline, summary_pipeline, non_summary_pipeline
+from modules import combined_pipeline, summary_pipeline, non_summary_pipeline, legacy_nonsummary
 
 
 def parse_args():
@@ -25,4 +25,4 @@ if __name__ == "__main__":
     elif known_args.pipeline_type == "summary":
         summary_pipeline.run()
     elif known_args.pipeline_type == "non_summary":
-        non_summary_pipeline.run()
+        legacy_nonsummary.run()
