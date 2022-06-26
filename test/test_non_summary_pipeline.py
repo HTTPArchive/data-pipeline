@@ -4,10 +4,13 @@ from modules.non_summary_pipeline import partition_step
 
 
 class TestNonSummaryPipeline(TestCase):
-
     @mock.patch("modules.non_summary_pipeline.get_page_url", lambda _: "example.com")
     def test_partition_step_home_page(self):
-        har = {"log": {"pages": [{"_metadata": {"crawl_depth": 0}}]}, "date": None, "client": None}
+        har = {
+            "log": {"pages": [{"_metadata": {"crawl_depth": 0}}]},
+            "date": None,
+            "client": None,
+        }
         partitions = 4
         min_partition = 1
         self.assertTrue(min_partition <= partition_step(har, partitions) <= partitions)

@@ -10,7 +10,6 @@ from modules.transformation import ReadHarFiles, HarJsonToSummaryDoFn
 
 
 class CombinedPipelineOptions(PipelineOptions):
-
     @classmethod
     def _add_argparse_args(cls, parser):
         super()._add_argparse_args(parser)
@@ -105,7 +104,7 @@ class CombinedPipelineOptions(PipelineOptions):
             "--non_summary_partitions",
             dest="partitions",
             help="Number of partitions to split non-summary BigQuery write tasks",
-            default=non_summary_pipeline.NUM_PARTITIONS
+            default=non_summary_pipeline.NUM_PARTITIONS,
         )
 
 
@@ -147,7 +146,9 @@ def create_pipeline(argv=None):
             | "MapJSON" >> beam.MapTuple(non_summary_pipeline.from_json)
             | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
             | "WriteNonSummaryTables"
-            >> non_summary_pipeline.WriteNonSummaryToBigQuery(**combined_options.get_all_options())
+            >> non_summary_pipeline.WriteNonSummaryToBigQuery(
+                **combined_options.get_all_options()
+            )
         )
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)

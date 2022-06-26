@@ -370,7 +370,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         dataset_requests,
         dataset_response_bodies,
         label=None,
-        **kwargs
+        **kwargs,
     ):
         # TODO(BEAM-6158): Revert the workaround once we can pickle super() on py3.
         # super().__init__(label)
@@ -393,11 +393,11 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             >> beam.FlatMap(fn)
             | f"Write{utils.title_case_beam_transform_name(name)}{index}"
             >> transformation.WriteBigQuery(
-            table=table,
-            schema=schema,
-            streaming=self.streaming,
-            method=self.big_query_write_method,
-        )
+                table=table,
+                schema=schema,
+                streaming=self.streaming,
+                method=self.big_query_write_method,
+            )
         )
 
     def expand(self, hars):
@@ -410,9 +410,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="pages",
                 index=idx,
                 fn=get_page,
-                table=lambda row: utils.format_table_name(
-                    row, self.dataset_pages
-                ),
+                table=lambda row: utils.format_table_name(row, self.dataset_pages),
                 schema=constants.BIGQUERY["schemas"]["pages"],
             )
 
@@ -432,9 +430,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="lighthouse",
                 index=idx,
                 fn=get_lighthouse_reports,
-                table=lambda row: utils.format_table_name(
-                    row, self.dataset_lighthouse
-                ),
+                table=lambda row: utils.format_table_name(row, self.dataset_lighthouse),
                 schema=constants.BIGQUERY["schemas"]["lighthouse"],
             )
 
@@ -443,9 +439,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="requests",
                 index=idx,
                 fn=get_requests,
-                table=lambda row: utils.format_table_name(
-                    row, self.dataset_requests
-                ),
+                table=lambda row: utils.format_table_name(row, self.dataset_requests),
                 schema=constants.BIGQUERY["schemas"]["requests"],
             )
 
