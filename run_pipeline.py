@@ -1,28 +1,19 @@
-import argparse
+#!/usr/bin/env python3
+
 import logging
 
-from modules import combined_pipeline, summary_pipeline, non_summary_pipeline
+from apache_beam.runners import DataflowRunner
+
+from modules import combined_pipeline
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    pipeline_types = ["combined", "summary", "non_summary"]
-    parser.add_argument(
-        "--pipeline_type",
-        default="combined",
-        choices=pipeline_types,
-        help=f"Type of pipeline to run. One of {','.join(pipeline_types)}",
-    )
-    return parser.parse_known_args()
+def run(argv=None):
+    logging.getLogger().setLevel(logging.INFO)
+    p = combined_pipeline.create_pipeline()
+    pipeline_result = p.run(argv)
+    if not isinstance(p.runner, DataflowRunner):
+        pipeline_result.wait_until_finish()
 
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.INFO)
-    known_args, extra_args = parse_args()
-
-    if known_args.pipeline_type == "combined":
-        combined_pipeline.run()
-    elif known_args.pipeline_type == "summary":
-        summary_pipeline.run()
-    elif known_args.pipeline_type == "non_summary":
-        non_summary_pipeline.run()
+    run()

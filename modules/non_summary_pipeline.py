@@ -2,16 +2,12 @@
 
 from __future__ import absolute_import
 
-import argparse
 import json
 import logging
 from copy import deepcopy
 from hashlib import sha256
 
 import apache_beam as beam
-from apache_beam.io import WriteToBigQuery
-from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
-from apache_beam.runners import DataflowRunner
 
 from modules import utils, constants, transformation
 
@@ -363,12 +359,32 @@ def add_date_and_client(element):
 
 
 class WriteNonSummaryToBigQuery(beam.PTransform):
-    def __init__(self, options, label=None):
+    def __init__(
+        self,
+        streaming,
+        big_query_write_method,
+        partitions,
+        dataset_pages,
+        dataset_technologies,
+        dataset_lighthouse,
+        dataset_requests,
+        dataset_response_bodies,
+        label=None,
+        **kwargs
+    ):
         # TODO(BEAM-6158): Revert the workaround once we can pickle super() on py3.
         # super().__init__(label)
         beam.PTransform.__init__(self)
-        self.non_summary_options = options.view_as(NonSummaryPipelineOptions)
-        self.standard_options = options.view_as(StandardOptions)
+        self.label = label
+
+        self.streaming = streaming
+        self.big_query_write_method = big_query_write_method
+        self.partitions = partitions
+        self.dataset_pages = dataset_pages
+        self.dataset_technologies = dataset_technologies
+        self.dataset_lighthouse = dataset_lighthouse
+        self.dataset_requests = dataset_requests
+        self.dataset_response_bodies = dataset_response_bodies
 
     def _transform_and_write_partition(self, pcoll, name, index, fn, table, schema):
         return (
@@ -377,15 +393,15 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             >> beam.FlatMap(fn)
             | f"Write{utils.title_case_beam_transform_name(name)}{index}"
             >> transformation.WriteBigQuery(
-                table=table,
-                schema=schema,
-                streaming=self.standard_options.streaming,
-                method=self.non_summary_options.big_query_write_method,
-            )
+            table=table,
+            schema=schema,
+            streaming=self.streaming,
+            method=self.big_query_write_method,
+        )
         )
 
     def expand(self, hars):
-        partitions = hars | beam.Partition(partition_step, self.non_summary_options.partitions)
+        partitions = hars | beam.Partition(partition_step, self.partitions)
 
         # enumerate starting from 1, discarding the 0th elements (failures)
         for idx, part in enumerate(partitions, 1):
@@ -395,7 +411,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 index=idx,
                 fn=get_page,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_pages
+                    row, self.dataset_pages
                 ),
                 schema=constants.BIGQUERY["schemas"]["pages"],
             )
@@ -406,7 +422,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 index=idx,
                 fn=get_technologies,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_technologies
+                    row, self.dataset_technologies
                 ),
                 schema=constants.BIGQUERY["schemas"]["technologies"],
             )
@@ -417,7 +433,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 index=idx,
                 fn=get_lighthouse_reports,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_lighthouse
+                    row, self.dataset_lighthouse
                 ),
                 schema=constants.BIGQUERY["schemas"]["lighthouse"],
             )
@@ -428,7 +444,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 index=idx,
                 fn=get_requests,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_requests
+                    row, self.dataset_requests
                 ),
                 schema=constants.BIGQUERY["schemas"]["requests"],
             )
@@ -439,100 +455,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 index=idx,
                 fn=get_response_bodies,
                 table=lambda row: utils.format_table_name(
-                    row, self.non_summary_options.dataset_response_bodies
+                    row, self.dataset_response_bodies
                 ),
                 schema=constants.BIGQUERY["schemas"]["response_bodies"],
             )
-
-
-class NonSummaryPipelineOptions(PipelineOptions):
-    @classmethod
-    def _add_argparse_args(cls, parser):
-        super()._add_argparse_args(parser)
-        parser.add_argument(
-            "--input_non_summary",
-            dest="input",
-            help="Input Cloud Storage directory to process.",
-        )
-
-        parser.add_argument(
-            "--partitions",
-            dest="partitions",
-            help="Number of partitions to split BigQuery write tasks",
-            default=NUM_PARTITIONS
-        )
-
-        bq_write_methods = [
-            WriteToBigQuery.Method.STREAMING_INSERTS,
-            WriteToBigQuery.Method.FILE_LOADS,
-        ]
-        parser.add_argument(
-            "--big_query_write_method_non_summary",
-            dest="big_query_write_method",
-            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
-            choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
-        )
-
-        parser.add_argument(
-            "--dataset_pages",
-            help="BigQuery dataset to write pages table",
-            default=constants.BIGQUERY["datasets"]["pages"],
-        )
-        parser.add_argument(
-            "--dataset_technologies",
-            help="BigQuery dataset to write technologies table",
-            default=constants.BIGQUERY["datasets"]["technologies"],
-        )
-        parser.add_argument(
-            "--dataset_lighthouse",
-            help="BigQuery dataset to write lighthouse table",
-            default=constants.BIGQUERY["datasets"]["lighthouse"],
-        )
-        parser.add_argument(
-            "--dataset_requests",
-            help="BigQuery dataset to write requests table",
-            default=constants.BIGQUERY["datasets"]["requests"],
-        )
-        parser.add_argument(
-            "--dataset_response_bodies",
-            help="BigQuery dataset to write response_bodies table",
-            default=constants.BIGQUERY["datasets"]["response_bodies"],
-        )
-
-
-def create_pipeline(argv=None):
-    """Constructs and runs the BigQuery import pipeline."""
-    parser = argparse.ArgumentParser()
-    known_args, pipeline_args = parser.parse_known_args(argv)
-    pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
-    known_args = pipeline_options.view_as(NonSummaryPipelineOptions)
-    if pipeline_options.view_as(StandardOptions).streaming:
-        raise NotImplementedError(
-            "Unable to run non-summary pipeline in streaming mode, please use batch instead"
-        )
-
-    p = beam.Pipeline(options=pipeline_options)
-
-    (
-        p
-        | beam.Create([known_args.input])
-        | beam.io.ReadAllFromText(with_filename=True)
-        | "MapJSON" >> beam.MapTuple(from_json)
-        | "AddDateAndClient" >> beam.Map(add_date_and_client)
-        | WriteNonSummaryToBigQuery(pipeline_options)
-    )
-
-    return p
-
-
-def run(argv=None):
-    logging.getLogger().setLevel(logging.INFO)
-    p = create_pipeline()
-    pipeline_result = p.run(argv)
-    if not isinstance(p.runner, DataflowRunner):
-        pipeline_result.wait_until_finish()
-
-
-if __name__ == "__main__":
-    run()
