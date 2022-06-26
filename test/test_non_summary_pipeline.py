@@ -20,7 +20,9 @@ class TestNonSummaryPipeline(TestCase):
         min_partition = 1
 
         for har in hars:
-            self.assertTrue(min_partition <= partition_step(har, partitions) <= partitions)
+            self.assertTrue(
+                min_partition <= partition_step(har, partitions) <= partitions
+            )
 
     def test_partition_step_empty_har(self):
         har = None

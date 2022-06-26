@@ -16,7 +16,6 @@ BIGQUERY = {
         "lighthouse_all": "httparchive:experimental_lighthouse",
         "requests_all": "httparchive:experimental_requests",
         "response_bodies_all": "httparchive:experimental_response_bodies",
-
         "summary_pages_home": "httparchive:summary_pages",
         "summary_requests_home": "httparchive:summary_requests",
         "pages_home": "httparchive:pages",

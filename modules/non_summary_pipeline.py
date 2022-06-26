@@ -318,7 +318,7 @@ def get_lighthouse_reports(har):
             "report": report_json,
             "date": har["date"],
             "client": har["client"],
-            "metadata": metadata
+            "metadata": metadata,
         }
     ]
 
@@ -420,7 +420,9 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         self.dataset_requests_home = dataset_requests_home_only
         self.dataset_response_bodies_home = dataset_response_bodies_home_only
 
-    def _transform_and_write_partition(self, pcoll, name, index, fn, table_all, table_home, schema):
+    def _transform_and_write_partition(
+        self, pcoll, name, index, fn, table_all, table_home, schema
+    ):
         formatted_name = utils.title_case_beam_transform_name(name)
 
         all_rows = pcoll | f"Map{formatted_name}{index}" >> beam.FlatMap(fn)
