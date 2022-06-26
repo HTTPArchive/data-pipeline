@@ -26,7 +26,7 @@ def get_page(har):
     page = har.get("log").get("pages")[0]
     url = page.get("_URL")
 
-    metadata = page.get("_metadata")
+    metadata = get_metadata(har)
     if metadata:
         # The page URL from metadata is more accurate.
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
@@ -54,6 +54,7 @@ def get_page(har):
             "payload": payload_json,
             "date": har["date"],
             "client": har["client"],
+            "metadata": metadata,
         }
     ]
 
@@ -70,17 +71,27 @@ def get_page_url(har):
     return page[0].get("url")
 
 
+def get_metadata(har):
+    page = har.get("log").get("pages")[0]
+    metadata = page.get("_metadata")
+    return metadata
+
+
+def is_home_page(mapped_har):
+    metadata = mapped_har.get("metadata")
+    if metadata and "crawl_depth" in metadata:
+        return metadata.get("crawl_depth") == 0
+        # Only home pages have a crawl depth of 0.
+    else:
+        return True
+        # legacy default
+
+
 def partition_step(har, num_partitions):
     """Returns a partition number based on the hashed HAR page URL"""
 
     if not har:
         logging.warning("Unable to partition step, null HAR.")
-        return 0
-
-    page = har.get("log").get("pages")[0]
-    metadata = page.get("_metadata")
-    if metadata.get("crawl_depth") and metadata.get("crawl_depth") != "0":
-        # Only home pages have a crawl depth of 0.
         return 0
 
     page_url = get_page_url(har)
@@ -135,6 +146,8 @@ def get_requests(har):
             )
             continue
 
+        metadata = get_metadata(har)
+
         requests.append(
             {
                 "page": page_url,
@@ -142,6 +155,7 @@ def get_requests(har):
                 "payload": payload,
                 "date": har["date"],
                 "client": har["client"],
+                "metadata": metadata,
             }
         )
 
@@ -186,6 +200,8 @@ def get_response_bodies(har):
                 % (request_url, len(body), MAX_CONTENT_SIZE)
             )
 
+        metadata = get_metadata(har)
+
         response_bodies.append(
             {
                 "page": page_url,
@@ -194,6 +210,7 @@ def get_response_bodies(har):
                 "truncated": truncated,
                 "date": har["date"],
                 "client": har["client"],
+                "metadata": metadata,
             }
         )
 
@@ -210,6 +227,7 @@ def get_technologies(har):
     page_url = page.get("_URL")
     app_names = page.get("_detected_apps", {})
     categories = page.get("_detected", {})
+    metadata = get_metadata(har)
 
     # When there are no detected apps, it appears as an empty array.
     if isinstance(app_names, list):
@@ -242,6 +260,7 @@ def get_technologies(har):
                     "info": info,
                     "date": har["date"],
                     "client": har["client"],
+                    "metadata": metadata,
                 }
             )
 
@@ -289,12 +308,15 @@ def get_lighthouse_reports(har):
         )
         return None
 
+    metadata = get_metadata(har)
+
     return [
         {
             "url": page_url,
             "report": report_json,
             "date": har["date"],
             "client": har["client"],
+            "metadata": metadata
         }
     ]
 
@@ -369,6 +391,11 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         dataset_lighthouse,
         dataset_requests,
         dataset_response_bodies,
+        dataset_pages_home_only,
+        dataset_technologies_home_only,
+        dataset_lighthouse_home_only,
+        dataset_requests_home_only,
+        dataset_response_bodies_home_only,
         label=None,
         **kwargs,
     ):
@@ -385,19 +412,31 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         self.dataset_lighthouse = dataset_lighthouse
         self.dataset_requests = dataset_requests
         self.dataset_response_bodies = dataset_response_bodies
+        self.dataset_pages_home = dataset_pages_home_only
+        self.dataset_technologies_home = dataset_technologies_home_only
+        self.dataset_lighthouse_home = dataset_lighthouse_home_only
+        self.dataset_requests_home = dataset_requests_home_only
+        self.dataset_response_bodies_home = dataset_response_bodies_home_only
 
-    def _transform_and_write_partition(self, pcoll, name, index, fn, table, schema):
-        return (
-            pcoll
-            | f"Map{utils.title_case_beam_transform_name(name)}{index}"
-            >> beam.FlatMap(fn)
-            | f"Write{utils.title_case_beam_transform_name(name)}{index}"
-            >> transformation.WriteBigQuery(
-                table=table,
-                schema=schema,
-                streaming=self.streaming,
-                method=self.big_query_write_method,
-            )
+    def _transform_and_write_partition(self, pcoll, name, index, fn, table_all, table_home, schema):
+        formatted_name = utils.title_case_beam_transform_name(name)
+
+        all_rows = pcoll | f"Map{formatted_name}{index}" >> beam.FlatMap(fn)
+
+        home_only_rows = all_rows | f"Filter{formatted_name}{index}" >> beam.Filter(is_home_page)
+
+        all_rows | f"Write{formatted_name}All{index}" >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(row, table_all),
+            schema=schema,
+            streaming=self.streaming,
+            method=self.big_query_write_method,
+        )
+
+        home_only_rows | f"Write{formatted_name}Home{index}" >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(row, table_home),
+            schema=schema,
+            streaming=self.streaming,
+            method=self.big_query_write_method,
         )
 
     def expand(self, hars):
@@ -410,7 +449,8 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="pages",
                 index=idx,
                 fn=get_page,
-                table=lambda row: utils.format_table_name(row, self.dataset_pages),
+                table_all=self.dataset_pages,
+                table_home=self.dataset_pages_home,
                 schema=constants.BIGQUERY["schemas"]["pages"],
             )
 
@@ -419,9 +459,8 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="technologies",
                 index=idx,
                 fn=get_technologies,
-                table=lambda row: utils.format_table_name(
-                    row, self.dataset_technologies
-                ),
+                table_all=self.dataset_technologies,
+                table_home=self.dataset_technologies_home,
                 schema=constants.BIGQUERY["schemas"]["technologies"],
             )
 
@@ -430,7 +469,8 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="lighthouse",
                 index=idx,
                 fn=get_lighthouse_reports,
-                table=lambda row: utils.format_table_name(row, self.dataset_lighthouse),
+                table_all=self.dataset_lighthouse,
+                table_home=self.dataset_lighthouse_home,
                 schema=constants.BIGQUERY["schemas"]["lighthouse"],
             )
 
@@ -439,7 +479,8 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="requests",
                 index=idx,
                 fn=get_requests,
-                table=lambda row: utils.format_table_name(row, self.dataset_requests),
+                table_all=self.dataset_requests,
+                table_home=self.dataset_requests_home,
                 schema=constants.BIGQUERY["schemas"]["requests"],
             )
 
@@ -448,8 +489,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 name="response_bodies",
                 index=idx,
                 fn=get_response_bodies,
-                table=lambda row: utils.format_table_name(
-                    row, self.dataset_response_bodies
-                ),
+                table_all=self.dataset_response_bodies,
+                table_home=self.dataset_response_bodies_home,
                 schema=constants.BIGQUERY["schemas"]["response_bodies"],
             )

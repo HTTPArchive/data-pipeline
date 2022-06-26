@@ -75,29 +75,54 @@ class CombinedPipelineOptions(PipelineOptions):
         )
 
         parser.add_argument(
+            "--dataset_pages_home_only",
+            help="BigQuery dataset to write pages table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["pages_home"],
+        )
+        parser.add_argument(
+            "--dataset_technologies_home_only",
+            help="BigQuery dataset to write technologies table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["technologies_home"],
+        )
+        parser.add_argument(
+            "--dataset_lighthouse_home_only",
+            help="BigQuery dataset to write lighthouse table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["lighthouse_home"],
+        )
+        parser.add_argument(
+            "--dataset_requests_home_only",
+            help="BigQuery dataset to write requests table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["requests_home"],
+        )
+        parser.add_argument(
+            "--dataset_response_bodies_home_only",
+            help="BigQuery dataset to write response_bodies table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["response_bodies_home"],
+        )
+        parser.add_argument(
             "--dataset_pages",
             help="BigQuery dataset to write pages table",
-            default=constants.BIGQUERY["datasets"]["pages"],
+            default=constants.BIGQUERY["datasets"]["pages_all"],
         )
         parser.add_argument(
             "--dataset_technologies",
             help="BigQuery dataset to write technologies table",
-            default=constants.BIGQUERY["datasets"]["technologies"],
+            default=constants.BIGQUERY["datasets"]["technologies_all"],
         )
         parser.add_argument(
             "--dataset_lighthouse",
             help="BigQuery dataset to write lighthouse table",
-            default=constants.BIGQUERY["datasets"]["lighthouse"],
+            default=constants.BIGQUERY["datasets"]["lighthouse_all"],
         )
         parser.add_argument(
             "--dataset_requests",
             help="BigQuery dataset to write requests table",
-            default=constants.BIGQUERY["datasets"]["requests"],
+            default=constants.BIGQUERY["datasets"]["requests_all"],
         )
         parser.add_argument(
             "--dataset_response_bodies",
             help="BigQuery dataset to write response_bodies table",
-            default=constants.BIGQUERY["datasets"]["response_bodies"],
+            default=constants.BIGQUERY["datasets"]["response_bodies_all"],
         )
 
         parser.add_argument(
