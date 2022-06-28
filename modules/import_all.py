@@ -483,6 +483,7 @@ def run(argv=None):
 
     hars = (
         reader
+        | beam.Reshuffle()
         | "ReadHarFiles" >> beam.io.ReadAllFromText()
         | 'MapJSON' >> beam.Map(from_json)
     )
