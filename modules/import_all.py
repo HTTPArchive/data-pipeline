@@ -430,10 +430,13 @@ def from_json(string):
         return
 
 
-def get_crawl_info(release):
+def get_crawl_info(release, input_file=False):
     """Formats a release string into a BigQuery date."""
 
-    client, date_string = release.split('/')[-1].split('-')
+    if input_file:
+        client, date_string = release.split(".")[0].split('-')
+    else:
+        client, date_string = release.split('/')[-1].split('-')
 
     if client == 'chrome':
         client = 'desktop'
@@ -455,22 +458,32 @@ def get_gcs_dir(release):
 def run(argv=None):
     """Constructs and runs the BigQuery import pipeline."""
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         '--input',
-        required=True,
         help='Input Cloud Storage directory to process.')
+    group.add_argument(
+        '--input_file',
+        help="Input file containing a list of HAR files"
+    )
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
 
-    gcs_dir = get_gcs_dir(known_args.input)
-    client, crawl_date = get_crawl_info(known_args.input)
-
     pipeline = beam.Pipeline(options=pipeline_options)
 
+    if known_args.input:
+        gcs_dir = get_gcs_dir(known_args.input)
+        client, crawl_date = get_crawl_info(known_args.input)
+        reader = pipeline | beam.Create([gcs_dir])
+    elif known_args.input_file:
+        client, crawl_date = get_crawl_info(known_args.input_file, input_file=True)
+        reader = pipeline | beam.Create([known_args.input_file]) | "ReadInputFile" >> beam.io.ReadAllFromText()
+    else:
+        raise RuntimeError("Unexpected pipeline input path")
+
     hars = (
-        pipeline
-        | beam.Create([gcs_dir])
-        | beam.io.ReadAllFromText()
+        reader
+        | "ReadHarFiles" >> beam.io.ReadAllFromText()
         | 'MapJSON' >> beam.Map(from_json)
     )
 
