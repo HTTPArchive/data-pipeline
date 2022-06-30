@@ -102,9 +102,10 @@ def partition_step(har, num_partitions):
 
     _hash = hash_url(page_url)
 
+    # shift partitions by one so the zero-th contains errors
     offset = 1
 
-    return (_hash % num_partitions) + offset
+    return (_hash % (num_partitions - 1)) + offset
 
 
 def get_requests(har):
@@ -444,7 +445,8 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         )
 
     def expand(self, hars):
-        partitions = hars | beam.Partition(partition_step, self.partitions)
+        # Add one to the number of partitions to use the zero-th partition for failures
+        partitions = hars | beam.Partition(partition_step, self.partitions + 1)
 
         # enumerate starting from 1, discarding the 0th elements (failures)
         for idx, part in enumerate(partitions, 1):

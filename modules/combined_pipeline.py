@@ -27,13 +27,16 @@ class CombinedPipelineOptions(PipelineOptions):
         group = parser.add_mutually_exclusive_group(required=True)
         group.add_argument(
             "--input",
-            dest="input",
-            help="Input file to process. Example: gs://httparchive/crawls/*Jan_1_2022",
+            help="Input file glob to process. Example: gs://httparchive/crawls/*Jan_1_2022",
+        )
+
+        group.add_argument(
+            '--input_file',
+            help="Input file containing a list of HAR files. Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
         )
 
         group.add_argument(
             "--subscription",
-            dest="subscription",
             help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
         )
 
@@ -51,13 +54,11 @@ class CombinedPipelineOptions(PipelineOptions):
 
         parser.add_argument(
             "--dataset_summary_pages",
-            dest="dataset_summary_pages",
             help="BigQuery dataset to write summary pages tables",
             default=constants.BIGQUERY["datasets"]["summary_pages_all"],
         )
         parser.add_argument(
             "--dataset_summary_requests",
-            dest="dataset_summary_requests",
             help="BigQuery dataset to write summary requests tables",
             default=constants.BIGQUERY["datasets"]["summary_requests_all"],
         )
@@ -69,7 +70,6 @@ class CombinedPipelineOptions(PipelineOptions):
         )
         parser.add_argument(
             "--dataset_summary_requests_home_only",
-            dest="dataset_summary_requests_home_only",
             help="BigQuery dataset to write summary requests tables (home-page-only)",
             default=constants.BIGQUERY["datasets"]["summary_requests_home"],
         )
@@ -148,7 +148,7 @@ def create_pipeline(argv=None):
 
     p = beam.Pipeline(options=pipeline_options)
 
-    files = p | ReadHarFiles(combined_options.subscription, combined_options.input)
+    files = p | ReadHarFiles(**combined_options.get_all_options())
 
     # summary pipeline
     if combined_options.pipeline_type in ["combined", "summary"]:

@@ -22,10 +22,11 @@ def add_deadletter_logging(deadletter_queues):
 
 
 class ReadHarFiles(beam.PTransform):
-    def __init__(self, subscription=None, _input=None):
+    def __init__(self, subscription=None, input=None, input_file=None, **kwargs):
         super().__init__()
         self.subscription = subscription
-        self.input = _input
+        self.input = input
+        self.input_file = input_file
 
     def expand(self, p):
         # PubSub pipeline
@@ -40,22 +41,31 @@ class ReadHarFiles(beam.PTransform):
             )
         # GCS pipeline
         else:
-            matching = (
-                self.input
-                if self.input.endswith(".har.gz")
-                else f"{self.input}/*.har.gz"
-                # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
-            )
+            if self.input:
+                matching = (
+                    self.input
+                    if self.input.endswith(".har.gz")
+                    else f"{self.input}/*.har.gz"
+                    # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
+                )
 
-            # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
-            #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
-            #   https://issues.apache.org/jira/browse/BEAM-9620
-            #   not an issue for the java SDK
-            #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
-            files = (
-                p
+                # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
+                #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
+                #   https://issues.apache.org/jira/browse/BEAM-9620
+                #   not an issue for the java SDK
+                #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
                 # TODO replace with match continuously for streaming?
-                | beam.Create([matching])
+                reader = p | beam.Create([matching])
+            else:
+                reader = (
+                    p
+                    | beam.Create([self.input_file])
+                    | "ReadInputFile" >> beam.io.ReadAllFromText()
+                )
+
+            files = (
+                reader
+                | beam.Reshuffle()
                 | beam.io.ReadAllFromText(with_filename=True)
             )
 
