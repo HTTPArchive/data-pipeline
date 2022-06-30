@@ -319,7 +319,6 @@ def get_requests(har, client, crawl_date):
         response_headers = []
 
         index += 1
-                
         if not request_url:
             logging.warning('Skipping empty request URL for "%s" index %s', page_url, index)
             continue
