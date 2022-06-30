@@ -64,7 +64,7 @@ def get_page(har, client, crawl_date):
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
         url = metadata.get('tested_url', url)
         client = metadata.get('layout', client).lower()
-        is_root_page = metadata.get('crawl_depth', '0') == '0'
+        is_root_page = metadata.get('crawl_depth', 0) == 0
         root_page = metadata.get('root_page_url', url)
         rank = int(metadata.get('rank')) if metadata.get('rank') else None
 
@@ -302,7 +302,7 @@ def get_requests(har, client, crawl_date):
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
         page_url = metadata.get('tested_url', page_url)
         client = metadata.get('layout', client).lower()
-        is_root_page = metadata.get('crawl_depth', '0') == '0'
+        is_root_page = metadata.get('crawl_depth', 0) == 0
         root_page = metadata.get('root_page_url', page_url)
 
     entries = har.get('log').get('entries')
@@ -312,15 +312,17 @@ def get_requests(har, client, crawl_date):
 
     for request in entries:
 
-        # FIXME: temporary patch to allow empty values while testing
-        #   URL should not be null!
-        request_url = request.get('_full_url', "")
+        request_url = request.get('_full_url')
         is_main_document = request.get('_final_base_page', False)
         index = int(request.get('_index', index))
         request_headers = []
         response_headers = []
 
         index += 1
+                
+        if not request_url:
+            logging.warning('Skipping empty request URL for "%s" index %s', page_url, index)
+            continue
 
         if request.get('request') and request.get('request').get('headers'):
             request_headers = request.get('request').get('headers')
