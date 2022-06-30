@@ -32,6 +32,8 @@ BIGQUERY = {
         "lighthouse": {"fields": _get_schema("lighthouse.json")},
         "requests": {"fields": _get_schema("requests.json")},
         "response_bodies": {"fields": _get_schema("response_bodies.json")},
+        "all_pages": {"fields": _get_schema("all_pages.json")},
+        "all_requests": {"fields": _get_schema("all_requests.json")},
     },
 }
 
