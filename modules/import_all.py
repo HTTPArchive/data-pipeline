@@ -402,7 +402,7 @@ def trim_page(page):
 
     # Make a copy first so the data can be used later.
     page = deepcopy(page)
-    page.pop('_parsed_css')
+    page.pop('_parsed_css', None)
     return page
 
 
