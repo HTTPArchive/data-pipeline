@@ -6,17 +6,27 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
+from apache_beam.io.gcp.bigquery import BigQueryWriteFn
 from apache_beam.io.gcp.bigquery_tools import RetryStrategy
 from dateutil import parser as date_parser
 
 from modules import constants, utils
 
 
+def add_deadletter_logging(deadletter_queues):
+    for name, transform in deadletter_queues.items():
+        transform_name = f"Print{utils.title_case_beam_transform_name(name)}Errors"
+        transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
+            lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
+        )
+
+
 class ReadHarFiles(beam.PTransform):
-    def __init__(self, subscription=None, _input=None):
+    def __init__(self, subscription=None, input=None, input_file=None, **kwargs):
         super().__init__()
         self.subscription = subscription
-        self.input = _input
+        self.input = input
+        self.input_file = input_file
 
     def expand(self, p):
         # PubSub pipeline
@@ -31,19 +41,31 @@ class ReadHarFiles(beam.PTransform):
             )
         # GCS pipeline
         else:
-            matching = (
-                self.input if self.input.endswith(".har.gz") else f"{self.input}/*.har.gz"
-            )
+            if self.input:
+                matching = (
+                    self.input
+                    if self.input.endswith(".har.gz")
+                    else f"{self.input}/*.har.gz"
+                    # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
+                )
 
-            # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
-            #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
-            #   https://issues.apache.org/jira/browse/BEAM-9620
-            #   not an issue for the java SDK
-            #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
-            files = (
-                p
+                # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
+                #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
+                #   https://issues.apache.org/jira/browse/BEAM-9620
+                #   not an issue for the java SDK
+                #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
                 # TODO replace with match continuously for streaming?
-                | beam.Create([matching])
+                reader = p | beam.Create([matching])
+            else:
+                reader = (
+                    p
+                    | beam.Create([self.input_file])
+                    | "ReadInputFile" >> beam.io.ReadAllFromText()
+                )
+
+            files = (
+                reader
+                | beam.Reshuffle()
                 | beam.io.ReadAllFromText(with_filename=True)
             )
 
@@ -84,33 +106,11 @@ class WriteBigQuery(beam.PTransform):
         )
 
 
-def initialize_status_info(file_name, page):
-    # file name parsing kept for backward compatibility before 2022-03-01
-    dir_name, base_name = os.path.split(file_name)
-
-    date = utils.crawl_date(dir_name)
-
-    metadata = page.get("_metadata", {})
-
-    return {
-        "archive": "All",  # only one value found when porting logic from PHP
-        "label": "{dt:%b} {dt.day} {dt.year}".format(dt=date),
-        "crawlid": metadata.get("crawlid", 0),
-        "wptid": page.get("testID", base_name.split(".")[0]),
-        "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
-        "page": metadata.get("tested_url", ""),
-        "pageid": utils.clamp_integer(metadata["page_id"]) if metadata.get("page_id") else None,
-        "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
-        "date": "{:%Y_%m_%d}".format(date),
-        "client": metadata.get("layout", utils.client_name(file_name)).lower(),
-    }
-
-
-class ImportHarJson(beam.DoFn):
+class HarJsonToSummaryDoFn(beam.DoFn):
     def process(self, element, **kwargs):
         file_name, data = element
         try:
-            page, requests = self.generate_pages(file_name, data)
+            page, requests = HarJsonToSummary.generate_pages(file_name, data)
             if page:
                 yield beam.pvalue.TaggedOutput("page", page)
             if requests:
@@ -118,8 +118,36 @@ class ImportHarJson(beam.DoFn):
         except Exception:
             logging.exception(
                 f"Unable to unpack HAR, check previous logs for detailed errors. "
-                f"file_name={file_name}, element={element}"
+                f"{file_name=}, {element=}"
             )
+
+
+class HarJsonToSummary:
+    @staticmethod
+    def initialize_status_info(file_name, page):
+        # file name parsing kept for backward compatibility before 2022-03-01
+        dir_name, base_name = os.path.split(file_name)
+
+        date, client_name = utils.date_and_client_from_file_name(file_name)
+
+        metadata = page.get("_metadata", {})
+
+        return {
+            "archive": "All",  # only one value found when porting logic from PHP
+            "label": "{dt:%b} {dt.day} {dt.year}".format(dt=date),
+            "crawlid": metadata.get("crawlid", 0),
+            "wptid": page.get("testID", base_name.split(".")[0]),
+            "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
+            "page": metadata.get("tested_url", ""),
+            "pageid": utils.clamp_integer(metadata["page_id"])
+            if metadata.get("page_id")
+            else None,
+            "rank": utils.clamp_integer(metadata["rank"])
+            if metadata.get("rank")
+            else None,
+            "date": "{:%Y_%m_%d}".format(date),
+            "client": metadata.get("layout", client_name).lower(),
+        }
 
     @staticmethod
     def generate_pages(file_name, element):
@@ -139,24 +167,24 @@ class ImportHarJson(beam.DoFn):
             logging.warning(f"No pages found for: {file_name}")
             return None, None
 
-        status_info = initialize_status_info(file_name, pages[0])
+        status_info = HarJsonToSummary.initialize_status_info(file_name, pages[0])
 
         try:
-            page = ImportHarJson.import_page(pages[0], status_info)
+            page = HarJsonToSummary.import_page(pages[0], status_info)
         except Exception:
             logging.warning(
                 f"import_page() failed for status_info:{status_info}", exc_info=True
             )
             return None, None
 
-        entries, first_url, first_html_url = ImportHarJson.import_entries(
+        entries, first_url, first_html_url = HarJsonToSummary.import_entries(
             log["entries"], status_info
         )
         if not entries:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
             return None, None
         else:
-            agg_stats = ImportHarJson.aggregate_stats(
+            agg_stats = HarJsonToSummary.aggregate_stats(
                 entries, first_url, first_html_url, status_info
             )
             if not agg_stats:
@@ -167,9 +195,9 @@ class ImportHarJson(beam.DoFn):
             else:
                 page.update(agg_stats)
 
-        utils.clamp_integers(page, utils.int_columns_for_schema('pages'))
+        utils.clamp_integers(page, utils.int_columns_for_schema("pages"))
         for entry in entries:
-            utils.clamp_integers(entry, utils.int_columns_for_schema('requests'))
+            utils.clamp_integers(entry, utils.int_columns_for_schema("requests"))
 
         return page, entries
 
@@ -178,11 +206,16 @@ class ImportHarJson(beam.DoFn):
         requests = []
         first_url = ""
         first_html_url = ""
+        entry_number = 0
 
         for entry in entries:
+            if entry.get("_number"):
+                entry_number = entry["_number"]
+            else:
+                entry_number += 1
 
             ret_request = {
-                "requestid": (status_info["pageid"] << 32) + entry["_number"],
+                "requestid": (status_info["pageid"] << 32) + entry_number,
                 "client": status_info["client"],
                 "date": status_info["date"],
                 "pageid": status_info["pageid"],
@@ -212,7 +245,7 @@ class ImportHarJson(beam.DoFn):
                 request_other_headers,
                 request_cookie_size,
             ) = utils.parse_header(
-                request["headers"], constants.ghReqHeaders, cookie_key="cookie"
+                request["headers"], constants.GH_REQ_HEADERS, cookie_key="cookie"
             )
 
             req_headers_size = (
@@ -285,7 +318,7 @@ class ImportHarJson(beam.DoFn):
                 response_cookie_size,
             ) = utils.parse_header(
                 response["headers"],
-                constants.ghRespHeaders,
+                constants.GH_RESP_HEADERS,
                 cookie_key="set-cookie",
                 output_headers=request_headers,
             )
@@ -406,9 +439,7 @@ class ImportHarJson(beam.DoFn):
         )
 
         avg_dom_depth = (
-            int(float(page.get("_avg_dom_depth")))
-            if page.get("_avg_dom_depth")
-            else 0
+            int(float(page.get("_avg_dom_depth"))) if page.get("_avg_dom_depth") else 0
         )
 
         return {

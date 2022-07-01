@@ -1,40 +1,44 @@
 import importlib.resources as pkg_resources
 import json
 
+
+def _get_schema(path):
+    return json.loads(pkg_resources.read_text("schema", path))
+
+
 # TODO remove 'experimental' before going live
-bigquery = {
+BIGQUERY = {
     "datasets": {
-        "pages": "httparchive:experimental_summary_pages",
-        "requests": "httparchive:experimental_summary_requests",
-        "home_pages": "httparchive:summary_pages",
-        "home_requests": "httparchive:summary_requests",
+        "summary_pages_all": "httparchive:experimental_summary_pages",
+        "summary_requests_all": "httparchive:experimental_summary_requests",
+        "pages_all": "httparchive:experimental_pages",
+        "technologies_all": "httparchive:experimental_technologies",
+        "lighthouse_all": "httparchive:experimental_lighthouse",
+        "requests_all": "httparchive:experimental_requests",
+        "response_bodies_all": "httparchive:experimental_response_bodies",
+        "summary_pages_home": "httparchive:summary_pages",
+        "summary_requests_home": "httparchive:summary_requests",
+        "pages_home": "httparchive:pages",
+        "technologies_home": "httparchive:technologies",
+        "lighthouse_home": "httparchive:lighthouse",
+        "requests_home": "httparchive:requests",
+        "response_bodies_home": "httparchive:response_bodies",
     },
     "schemas": {
-        "pages": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "summary_pages.json")
-            )
-        },
-        "requests": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "summary_requests.json")
-            )
-        },
-        "all_pages": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "all_pages.json")
-            )
-        },
-        "all_requests": {
-            "fields": json.loads(
-                pkg_resources.read_text("schema", "all_requests.json")
-            )
-        },
+        "summary_pages": {"fields": _get_schema("summary_pages.json")},
+        "summary_requests": {"fields": _get_schema("summary_requests.json")},
+        "pages": {"fields": _get_schema("pages.json")},
+        "technologies": {"fields": _get_schema("technologies.json")},
+        "lighthouse": {"fields": _get_schema("lighthouse.json")},
+        "requests": {"fields": _get_schema("requests.json")},
+        "response_bodies": {"fields": _get_schema("response_bodies.json")},
+        "all_pages": {"fields": _get_schema("all_pages.json")},
+        "all_requests": {"fields": _get_schema("all_requests.json")},
     },
 }
 
 # mapping of headers to DB fields
-ghReqHeaders = {
+GH_REQ_HEADERS = {
     "accept": "req_accept",
     "accept-charset": "req_accept_charset",
     "accept-encoding": "req_accept_encoding",
@@ -46,7 +50,7 @@ ghReqHeaders = {
     "referer": "req_referer",
     "user-agent": "req_user_agent",
 }
-ghRespHeaders = {
+GH_RESP_HEADERS = {
     "accept-ranges": "resp_accept_ranges",
     "age": "resp_age",
     "cache-control": "resp_cache_control",

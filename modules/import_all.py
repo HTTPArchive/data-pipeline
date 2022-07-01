@@ -14,7 +14,7 @@ import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.runners import DataflowRunner
 
-from modules import constants
+from modules import constants, utils
 
 
 # BigQuery can handle rows up to 100 MB.
@@ -69,6 +69,7 @@ def get_page(har, client, crawl_date):
         rank = int(metadata.get('rank')) if metadata.get('rank') else None
 
     try:
+        page = trim_page(page)
         payload_json = to_json(page)
     except ValueError:
         logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', wptid)
@@ -350,6 +351,10 @@ def get_requests(har, client, crawl_date):
             if response_body is not None:
                 response_body = response_body[:MAX_CONTENT_SIZE]
 
+        mime_type = request.get('response').get('content').get('mimeType')
+        ext = utils.get_ext(request_url)
+        type = utils.pretty_type(mime_type, ext)
+
         requests.append({
             'date': date,
             'client': client,
@@ -358,8 +363,7 @@ def get_requests(har, client, crawl_date):
             'root_page': root_page,
             'url': request_url,
             'is_main_document': is_main_document,
-            # TODO: Get the type from the summary data.
-            'type': '',
+            'type': type,
             'index': index,
             'payload': payload,
             # TODO: Get the summary data.
@@ -388,6 +392,18 @@ def trim_request(request):
     request = deepcopy(request)
     request.get('response', {}).get('content', {}).pop('text', None)
     return request
+
+
+def trim_page(page):
+    """Removes unneeded fields from the page object."""
+
+    if not page:
+        return None
+
+    # Make a copy first so the data can be used later.
+    page = deepcopy(page)
+    page.pop('_parsed_css')
+    return page
 
 
 def to_json(obj):
