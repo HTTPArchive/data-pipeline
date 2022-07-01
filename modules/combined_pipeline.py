@@ -33,7 +33,7 @@ class CombinedPipelineOptions(PipelineOptions):
         group.add_argument(
             '--input_file',
             help="Input file containing a list of HAR files. "
-                "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
+                 "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
         )
 
         group.add_argument(
@@ -174,8 +174,8 @@ def create_pipeline(argv=None):
             | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
             | "WriteNonSummaryTables"
             >> non_summary_pipeline.WriteNonSummaryToBigQuery(
-                **combined_options.get_all_options()
-            )
+            **combined_options.get_all_options()
+        )
         )
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
