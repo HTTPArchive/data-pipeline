@@ -131,6 +131,7 @@ class CombinedPipelineOptions(PipelineOptions):
             dest="partitions",
             help="Number of partitions to split non-summary BigQuery write tasks",
             default=non_summary_pipeline.NUM_PARTITIONS,
+            type=int,
         )
 
 
