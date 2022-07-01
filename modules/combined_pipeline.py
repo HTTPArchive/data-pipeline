@@ -32,8 +32,8 @@ class CombinedPipelineOptions(PipelineOptions):
 
         group.add_argument(
             '--input_file',
-            help="Input file containing a list of HAR files. " + \
-                "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
+            help="Input file containing a list of HAR files. "
+                 "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
         )
 
         group.add_argument(

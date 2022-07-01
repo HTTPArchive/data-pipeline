@@ -350,7 +350,7 @@ def get_requests(har, client, crawl_date):
 
             if response_body is not None:
                 response_body = response_body[:MAX_CONTENT_SIZE]
-        
+
         mime_type = request.get('response').get('content').get('mimeType')
         ext = utils.get_ext(request_url)
         type = utils.pretty_type(mime_type, ext)

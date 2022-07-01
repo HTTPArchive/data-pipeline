@@ -132,7 +132,7 @@ def get_requests(har):
     for request in entries:
 
         request_url = request.get("_full_url")
-        
+
         if not request_url:
             logging.warning('Skipping empty request URL for "%s"', page_url)
             continue
