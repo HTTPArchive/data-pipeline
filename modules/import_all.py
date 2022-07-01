@@ -69,6 +69,7 @@ def get_page(har, client, crawl_date):
         rank = int(metadata.get('rank')) if metadata.get('rank') else None
 
     try:
+        page = trim_page(page)
         payload_json = to_json(page)
     except ValueError:
         logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', wptid)
@@ -388,6 +389,18 @@ def trim_request(request):
     request = deepcopy(request)
     request.get('response', {}).get('content', {}).pop('text', None)
     return request
+
+
+def trim_page(page):
+    """Removes unneeded fields from the page object."""
+
+    if not page:
+        return None
+
+    # Make a copy first so the data can be used later.
+    page = deepcopy(page)
+    page.pop('_parsed_css')
+    return page
 
 
 def to_json(obj):
