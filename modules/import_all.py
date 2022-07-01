@@ -14,7 +14,7 @@ import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.runners import DataflowRunner
 
-from modules import constants
+from modules import constants, utils
 
 
 # BigQuery can handle rows up to 100 MB.
@@ -349,6 +349,10 @@ def get_requests(har, client, crawl_date):
 
             if response_body is not None:
                 response_body = response_body[:MAX_CONTENT_SIZE]
+        
+        mime_type = request.get('response').get('content').get('mimeType')
+        ext = utils.get_ext(request_url)
+        type = utils.pretty_type(mime_type, ext)
 
         requests.append({
             'date': date,
@@ -358,8 +362,7 @@ def get_requests(har, client, crawl_date):
             'root_page': root_page,
             'url': request_url,
             'is_main_document': is_main_document,
-            # TODO: Get the type from the summary data.
-            'type': '',
+            'type': type,
             'index': index,
             'payload': payload,
             # TODO: Get the summary data.
