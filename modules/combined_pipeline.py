@@ -174,8 +174,8 @@ def create_pipeline(argv=None):
             | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
             | "WriteNonSummaryTables"
             >> non_summary_pipeline.WriteNonSummaryToBigQuery(
-            **combined_options.get_all_options()
-        )
+                **combined_options.get_all_options()
+            )
         )
 
     # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
