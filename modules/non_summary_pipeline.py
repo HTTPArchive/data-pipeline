@@ -465,10 +465,15 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         # Add one to the number of partitions to use the zero-th partition for failures
         partitions = hars | beam.Partition(partition_step, self.partitions + 1)
 
-        # enumerate starting from 1, discarding the 0th elements (failures)
-        for idx, part in enumerate(partitions, 1):
+        # log 0th elements (failures)
+        partitions[0] | "LogPartitionFailures" >> beam.FlatMap(
+            lambda e: logging.warning(f"Unable to partition record: {e}")
+        )
+
+        # enumerate starting from 1
+        for idx in range(1, self.partitions + 1):
             self._transform_and_write_partition(
-                pcoll=part,
+                pcoll=partitions[idx],
                 name="pages",
                 index=idx,
                 fn=get_page,
@@ -478,7 +483,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             )
 
             self._transform_and_write_partition(
-                pcoll=part,
+                pcoll=partitions[idx],
                 name="technologies",
                 index=idx,
                 fn=get_technologies,
@@ -488,7 +493,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             )
 
             self._transform_and_write_partition(
-                pcoll=part,
+                pcoll=partitions[idx],
                 name="lighthouse",
                 index=idx,
                 fn=get_lighthouse_reports,
@@ -498,7 +503,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             )
 
             self._transform_and_write_partition(
-                pcoll=part,
+                pcoll=partitions[idx],
                 name="requests",
                 index=idx,
                 fn=get_requests,
@@ -508,7 +513,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             )
 
             self._transform_and_write_partition(
-                pcoll=part,
+                pcoll=partitions[idx],
                 name="response_bodies",
                 index=idx,
                 fn=get_response_bodies,

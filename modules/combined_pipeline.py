@@ -33,7 +33,7 @@ class CombinedPipelineOptions(PipelineOptions):
         group.add_argument(
             '--input_file',
             help="Input file containing a list of HAR files. "
-                "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
+                 "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
         )
 
         group.add_argument(
@@ -131,6 +131,7 @@ class CombinedPipelineOptions(PipelineOptions):
             dest="partitions",
             help="Number of partitions to split non-summary BigQuery write tasks",
             default=non_summary_pipeline.NUM_PARTITIONS,
+            type=int,
         )
 
 
