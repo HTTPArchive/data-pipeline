@@ -84,7 +84,7 @@ class WriteBigQuery(beam.PTransform):
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
                 "method": WriteToBigQuery.Method.STREAMING_INSERTS,
-                "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
+                "create_disposition": BigQueryDisposition.CREATE_NEVER,
                 "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
