@@ -17,16 +17,16 @@ class WriteSummaryPagesToBigQuery(beam.PTransform):
         home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
 
         deadletter_queues = {
-            "pages": pages
-            | "WritePagesToBigQuery"
-            >> WriteBigQuery(
-                table=lambda row: utils.format_table_name(
-                    row, self.summary_options.dataset_summary_pages
-                ),
-                schema=constants.BIGQUERY["schemas"]["summary_pages"],
-                streaming=self.standard_options.streaming,
-                method=self.summary_options.big_query_write_method,
-            ),
+            # "pages": pages
+            # | "WritePagesToBigQuery"
+            # >> WriteBigQuery(
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.summary_options.dataset_summary_pages
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["summary_pages"],
+            #     streaming=self.standard_options.streaming,
+            #     method=self.summary_options.big_query_write_method,
+            # ),
             "home_pages": home_pages
             | "WriteHomePagesToBigQuery"
             >> WriteBigQuery(
@@ -59,16 +59,16 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
         )
 
         deadletter_queues = {
-            "requests": requests
-            | "WriteRequestsToBigQuery"
-            >> WriteBigQuery(
-                table=lambda row: utils.format_table_name(
-                    row, self.summary_options.dataset_summary_requests
-                ),
-                schema=constants.BIGQUERY["schemas"]["summary_requests"],
-                streaming=self.standard_options.streaming,
-                method=self.summary_options.big_query_write_method,
-            ),
+            # "requests": requests
+            # | "WriteRequestsToBigQuery"
+            # >> WriteBigQuery(
+            #     table=lambda row: utils.format_table_name(
+            #         row, self.summary_options.dataset_summary_requests
+            #     ),
+            #     schema=constants.BIGQUERY["schemas"]["summary_requests"],
+            #     streaming=self.standard_options.streaming,
+            #     method=self.summary_options.big_query_write_method,
+            # ),
             "home_requests": home_requests
             | "WriteHomeRequestsToBigQuery"
             >> WriteBigQuery(
