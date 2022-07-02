@@ -8,6 +8,7 @@ from copy import deepcopy
 from hashlib import sha256
 
 import apache_beam as beam
+from apache_beam.io import WriteToBigQuery
 
 from modules import utils, constants, transformation
 
@@ -439,7 +440,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         self.dataset_response_bodies_home = dataset_response_bodies_home_only
 
     def _transform_and_write_partition(
-        self, pcoll, name, index, fn, table_all, table_home, schema
+        self, pcoll, name, index, fn, table_all, table_home, schema, method=None
     ):
         formatted_name = utils.title_case_beam_transform_name(name)
 
@@ -451,14 +452,14 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             table=lambda row: utils.format_table_name(row, table_all),
             schema=schema,
             streaming=self.streaming,
-            method=self.big_query_write_method,
+            method=method if method else self.big_query_write_method,
         )
 
         home_only_rows | f"Write{formatted_name}Home{index}" >> transformation.WriteBigQuery(
             table=lambda row: utils.format_table_name(row, table_home),
             schema=schema,
             streaming=self.streaming,
-            method=self.big_query_write_method,
+            method=method if method else self.big_query_write_method,
         )
 
     def expand(self, hars):
@@ -520,4 +521,6 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 table_all=self.dataset_response_bodies,
                 table_home=self.dataset_response_bodies_home,
                 schema=constants.BIGQUERY["schemas"]["response_bodies"],
+                # special case, always use FILE_LOADS to avoid row size limits
+                method=WriteToBigQuery.Method.FILE_LOADS
             )

@@ -81,10 +81,15 @@ class WriteBigQuery(beam.PTransform):
         self.method = method
 
     def resolve_params(self):
+        if self.streaming:
+            create_disposition = BigQueryDisposition.CREATE_NEVER
+        else:
+            create_disposition = BigQueryDisposition.CREATE_IF_NEEDED
+
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
                 "method": WriteToBigQuery.Method.STREAMING_INSERTS,
-                "create_disposition": BigQueryDisposition.CREATE_NEVER,
+                "create_disposition": create_disposition,
                 "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
@@ -93,9 +98,10 @@ class WriteBigQuery(beam.PTransform):
         if self.method == WriteToBigQuery.Method.FILE_LOADS:
             return {
                 "method": WriteToBigQuery.Method.FILE_LOADS,
-                "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
+                "create_disposition": create_disposition,
                 "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
+                "triggering_frequency": 10 if self.streaming else None
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")
