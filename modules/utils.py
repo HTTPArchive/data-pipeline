@@ -161,11 +161,11 @@ def client_name(file_name):
         return client.lower()
 
 
-def format_table_name(row, table):
+def format_table_name(row, dataset):
     try:
-        return f"{table}.{row['date']}_{row['client']}"
+        return f"{dataset}.{row['date']}_{row['client']}"
     except Exception:
-        logging.exception(f"Unable to determine full table name. {table=},{row=}")
+        logging.exception(f"Unable to determine full table name. {dataset=},{row=}")
         raise
 
 

@@ -23,6 +23,8 @@ BIGQUERY = {
         "lighthouse_home": "httparchive:lighthouse",
         "requests_home": "httparchive:requests",
         "response_bodies_home": "httparchive:response_bodies",
+        "all_pages": "httparchive:all.pages",
+        "all_requests": "httparchive:all.requests",
     },
     "schemas": {
         "summary_pages": {"fields": _get_schema("summary_pages.json")},
@@ -34,6 +36,16 @@ BIGQUERY = {
         "response_bodies": {"fields": _get_schema("response_bodies.json")},
         "all_pages": {"fields": _get_schema("all_pages.json")},
         "all_requests": {"fields": _get_schema("all_requests.json")},
+    },
+    "additional_bq_parameters": {
+        "all_pages": {
+            'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
+            'clustering': {'fields': ['client', 'is_root_page', 'rank']}
+        },
+        "all_requests": {
+            'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
+            'clustering': {'fields': ['client', 'is_root_page', 'is_main_document', 'type']}
+        },
     },
 }
 

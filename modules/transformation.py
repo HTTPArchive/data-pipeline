@@ -13,6 +13,22 @@ from dateutil import parser as date_parser
 from modules import constants, utils
 
 
+def add_common_pipeline_options(parser):
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--input',
+        help='Input Cloud Storage directory to process.'
+    )
+    group.add_argument(
+        '--input_file',
+        help="Input file containing a list of HAR files"
+    )
+    group.add_argument(
+        "--subscription",
+        help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
+    )
+
+
 def add_deadletter_logging(deadletter_queues):
     for name, transform in deadletter_queues.items():
         transform_name = f"Print{utils.title_case_beam_transform_name(name)}Errors"
@@ -73,12 +89,15 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None, method=None):
+    def __init__(self, table, schema, streaming=None, method=None, additional_bq_parameters=None, **kwargs):
         super().__init__()
+        if additional_bq_parameters is None:
+            additional_bq_parameters = {}
         self.table = table
         self.schema = schema
         self.streaming = streaming
         self.method = method
+        self.additional_bq_parameters = additional_bq_parameters
 
     def resolve_params(self):
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
@@ -89,13 +108,19 @@ class WriteBigQuery(beam.PTransform):
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
+                "additional_bq_parameters": {
+                    **self.additional_bq_parameters,
+                }
             }
         if self.method == WriteToBigQuery.Method.FILE_LOADS:
             return {
                 "method": WriteToBigQuery.Method.FILE_LOADS,
                 "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
                 "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
-                "additional_bq_parameters": {"ignoreUnknownValues": True},
+                "additional_bq_parameters": {
+                    "ignoreUnknownValues": True,
+                    **self.additional_bq_parameters,
+                },
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")

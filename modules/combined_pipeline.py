@@ -6,7 +6,7 @@ from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 
 from modules import summary_pipeline, non_summary_pipeline, constants
-from modules.transformation import ReadHarFiles, HarJsonToSummaryDoFn
+from modules.transformation import ReadHarFiles, HarJsonToSummaryDoFn, add_common_pipeline_options
 
 
 class CombinedPipelineOptions(PipelineOptions):
@@ -22,23 +22,6 @@ class CombinedPipelineOptions(PipelineOptions):
             default="combined",
             choices=pipeline_types,
             help=f"Type of pipeline to run. One of {','.join(pipeline_types)}",
-        )
-
-        group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument(
-            "--input",
-            help="Input file glob to process. Example: gs://httparchive/crawls/*Jan_1_2022",
-        )
-
-        group.add_argument(
-            "--input_file",
-            help="Input file containing a list of HAR files. "
-            "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt",
-        )
-
-        group.add_argument(
-            "--subscription",
-            help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
         )
 
         bq_write_methods = [
@@ -137,6 +120,7 @@ class CombinedPipelineOptions(PipelineOptions):
 
 def create_pipeline(argv=None):
     parser = argparse.ArgumentParser()
+    add_common_pipeline_options(parser)
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
     standard_options = pipeline_options.view_as(StandardOptions)
@@ -150,7 +134,7 @@ def create_pipeline(argv=None):
 
     p = beam.Pipeline(options=pipeline_options)
 
-    files = p | ReadHarFiles(**combined_options.get_all_options())
+    files = p | ReadHarFiles(**vars(known_args))
 
     # summary pipeline
     if combined_options.pipeline_type in ["combined", "summary"]:

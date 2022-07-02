@@ -3,19 +3,18 @@
 from __future__ import absolute_import
 
 import argparse
-from copy import deepcopy
-from datetime import datetime
-from hashlib import sha256
 import json
 import logging
 import re
+from copy import deepcopy
+from hashlib import sha256
 
 import apache_beam as beam
+from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.runners import DataflowRunner
 
-from modules import constants, utils
-
+from modules import constants, utils, transformation
+from modules.transformation import ReadHarFiles, add_common_pipeline_options
 
 # BigQuery can handle rows up to 100 MB.
 MAX_CONTENT_SIZE = 10 * 1024 * 1024
@@ -44,16 +43,18 @@ def partition_step(function, har, client, crawl_date, index):
     return function(har, client, crawl_date)
 
 
-def get_page(har, client, crawl_date):
+def get_page(file_name, har):
     """Parses the page from a HAR object."""
 
     if not har:
         return
 
+    date, client = utils.date_and_client_from_file_name(file_name)
+
     page = har.get('log').get('pages')[0]
     url = page.get('_URL')
     wptid = page.get('testID')
-    date = crawl_date
+    date = "{:%Y-%m-%d}".format(date)
     is_root_page = True
     root_page = url
     rank = None
@@ -263,37 +264,39 @@ def get_lighthouse_reports(har, wptid):
     return report_json
 
 
-def partition_requests(har, client, crawl_date, index):
-    """Partitions requests across multiple concurrent steps."""
+# def partition_requests(har, client, crawl_date, index):
+#     """Partitions requests across multiple concurrent steps."""
+#
+#     if not har:
+#         return
+#
+#     page = har.get('log').get('pages')[0]
+#     page_url = page.get('_URL')
+#
+#     if hash_url(page_url) % NUM_PARTITIONS != index:
+#         return
+#
+#     metadata = page.get('_metadata')
+#     if metadata:
+#         # The page URL from metadata is more accurate.
+#         # See https://github.com/HTTPArchive/data-pipeline/issues/48
+#         page_url = metadata.get('tested_url', page_url)
+#         client = metadata.get('layout', client).lower()
+#
+#     return get_requests(har, client, crawl_date)
 
-    if not har:
-        return
 
-    page = har.get('log').get('pages')[0]
-    page_url = page.get('_URL')
-
-    if hash_url(page_url) % NUM_PARTITIONS != index:
-        return
-
-    metadata = page.get('_metadata')
-    if metadata:
-        # The page URL from metadata is more accurate.
-        # See https://github.com/HTTPArchive/data-pipeline/issues/48
-        page_url = metadata.get('tested_url', page_url)
-        client = metadata.get('layout', client).lower()
-
-    return get_requests(har, client, crawl_date)
-
-
-def get_requests(har, client, crawl_date):
+def get_requests(file_name, har):
     """Parses the requests from the HAR."""
 
     if not har:
         return
 
+    date, client = utils.date_and_client_from_file_name(file_name)
+
     page = har.get('log').get('pages')[0]
     page_url = page.get('_URL')
-    date = crawl_date
+    date = "{:%Y-%m-%d}".format(date)
     is_root_page = True
     root_page = page_url
 
@@ -439,95 +442,86 @@ def to_json(obj):
         'utf-8', 'surrogatepass').decode('utf-8', 'replace')
 
 
-def from_json(string):
+def from_json(file_name, string):
     """Returns an object from the JSON representation."""
 
     try:
-        return json.loads(string)
+        return file_name, json.loads(string)
     except json.JSONDecodeError as err:
         logging.error('Unable to parse JSON object "%s...": %s', string[:50], err)
-        return
+        return None, None
 
 
-def get_crawl_info(release, input_file=False):
-    """Formats a release string into a BigQuery date."""
+class AllPipelineOptions(PipelineOptions):
 
-    if input_file:
-        client, date_string = release.split(".")[0].split('-')
-    else:
-        client, date_string = release.split('/')[-1].split('-')
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        super()._add_argparse_args(parser)
 
-    if client == 'chrome':
-        client = 'desktop'
-    elif client == 'android':
-        client = 'mobile'
+        parser.prog = "all_pipeline"
 
-    date_obj = datetime.strptime(date_string, '%b_%d_%Y')  # Mar_01_2020
-    crawl_date = date_obj.strftime('%Y-%m-%d')  # 2020-03-01
+        parser.add_argument(
+            "--dataset_all_pages",
+            help="BigQuery dataset to write all.pages table",
+            default=constants.BIGQUERY["datasets"]["all_pages"],
+        )
+        parser.add_argument(
+            "--dataset_all_requests",
+            help="BigQuery dataset to write all.requests table",
+            default=constants.BIGQUERY["datasets"]["all_requests"],
+        )
 
-    return (client, crawl_date)
+        bq_write_methods = [
+            WriteToBigQuery.Method.STREAMING_INSERTS,
+            WriteToBigQuery.Method.FILE_LOADS,
+        ]
+        parser.add_argument(
+            "--big_query_write_method",
+            dest="method",
+            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
+            choices=bq_write_methods,
+            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+        )
 
 
-def get_gcs_dir(release):
-    """Formats a release string into a gs:// directory."""
-
-    return f'gs://httparchive/{release}/'
-
-
-def run(argv=None):
+def create_pipeline(argv=None):
     """Constructs and runs the BigQuery import pipeline."""
     parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        '--input',
-        help='Input Cloud Storage directory to process.')
-    group.add_argument(
-        '--input_file',
-        help="Input file containing a list of HAR files"
-    )
+    add_common_pipeline_options(parser)
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args, save_main_session=True)
+    all_pipeline_options = pipeline_options.view_as(AllPipelineOptions)
+    logging.info(
+        f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()}"
+    )
 
     pipeline = beam.Pipeline(options=pipeline_options)
 
-    if known_args.input:
-        gcs_dir = get_gcs_dir(known_args.input)
-        client, crawl_date = get_crawl_info(known_args.input)
-        reader = pipeline | beam.Create([gcs_dir])
-    elif known_args.input_file:
-        client, crawl_date = get_crawl_info(known_args.input_file, input_file=True)
-        reader = pipeline | beam.Create([known_args.input_file]) | "ReadInputFile" >> beam.io.ReadAllFromText()
-    else:
-        raise RuntimeError("Unexpected pipeline input path")
-
     hars = (
-        reader
-        | beam.Reshuffle()
-        | "ReadHarFiles" >> beam.io.ReadAllFromText()
-        | 'MapJSON' >> beam.Map(from_json)
+        pipeline
+        | ReadHarFiles(**vars(known_args))
+        | 'MapJSON' >> beam.MapTuple(from_json)
     )
 
-    for i in range(NUM_PARTITIONS):
-        _ = (
-            hars
-            | f'MapPage{i}s' >> beam.FlatMap(
-                (lambda i: lambda har: partition_step(get_page, har, client, crawl_date, i))(i))
-            | f'WritePages{i}' >> beam.io.WriteToBigQuery(
-                'httparchive:all.pages',
-                schema=constants.bigquery["schemas"]["all_pages"],
-                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+    # TODO consider re-adding partitions
+    _ = (
+        hars
+        | "MapPages" >> beam.FlatMapTuple(get_page)
+        | "WritePages" >> transformation.WriteBigQuery(
+            table=all_pipeline_options.dataset_all_pages,
+            schema=constants.BIGQUERY["schemas"]["all_pages"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_pages"],
+            **all_pipeline_options.get_all_options())
+        )
 
-        _ = (
-            hars
-            | f'MapRequests{i}' >> beam.FlatMap(
-                (lambda i: lambda har: partition_step(get_requests, har, client, crawl_date, i))(i))
-            | f'WriteRequests{i}' >> beam.io.WriteToBigQuery(
-                'httparchive:all.requests',
-                schema=constants.bigquery["schemas"]["all_requests"],
-                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER))
+    _ = (
+        hars
+        | "MapRequests" >> beam.FlatMapTuple(get_requests)
+        | "WriteRequests" >> transformation.WriteBigQuery(
+            table=all_pipeline_options.dataset_all_requests,
+            schema=constants.BIGQUERY["schemas"]["all_requests"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_requests"],
+            **all_pipeline_options.get_all_options())
+        )
 
-    pipeline_result = pipeline.run()
-    if not isinstance(pipeline.runner, DataflowRunner):
-        pipeline_result.wait_until_finish()
+    return pipeline
