@@ -450,14 +450,6 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
 
         home_only_rows = all_rows | f"Filter{formatted_name}{index}" >> beam.Filter(is_home_page)
 
-        # all_rows | f"Write{formatted_name}All{index}" >> transformation.WriteBigQuery(
-        #     table=lambda row: utils.format_table_name(row, table_all),
-        #     schema=schema,
-        #     streaming=self.streaming,
-        #     method=method if method else self.big_query_write_method,
-        #     triggering_frequency = self.triggering_frequency,
-        # )
-
         home_only_rows | f"Write{formatted_name}Home{index}" >> transformation.WriteBigQuery(
             table=lambda row: utils.format_table_name(row, table_home),
             schema=schema,
