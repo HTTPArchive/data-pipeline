@@ -33,9 +33,7 @@ class CombinedPipelineOptions(PipelineOptions):
         group.add_argument(
             '--input_file',
             help="Input file containing a list of HAR files. "
-                 # editorconfig-checker-disable
-                 "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
-                 # editorconfig-checker-enable
+            "Example: gs://httparchive/crawls_manifest/android-May_12_2022.txt"
         )
 
         group.add_argument(
@@ -57,12 +55,10 @@ class CombinedPipelineOptions(PipelineOptions):
         parser.add_argument(
             "--big_query_triggering_frequency",
             dest="triggering_frequency",
-            # editorconfig-checker-disable
             help="When method is FILE_LOADS: Value will be converted to int. Every triggering_frequency seconds, a "
-                 "BigQuery load job will be triggered for all the data written since the last load job.\n"
-                 "When method is STREAMING_INSERTS and with_auto_sharding=True: A streaming inserts batch will be "
-                 "submitted at least every triggering_frequency seconds when data is waiting."
-            # editorconfig-checker-enable
+            "BigQuery load job will be triggered for all the data written since the last load job.\n"
+            "When method is STREAMING_INSERTS and with_auto_sharding=True: A streaming inserts batch will be "
+            "submitted at least every triggering_frequency seconds when data is waiting."
         )
 
         parser.add_argument(
