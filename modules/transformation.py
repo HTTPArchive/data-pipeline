@@ -93,7 +93,7 @@ class WriteBigQuery(beam.PTransform):
             return {
                 "method": WriteToBigQuery.Method.STREAMING_INSERTS,
                 "create_disposition": create_disposition,
-                "write_disposition": BigQueryDisposition.WRITE_APPEND,
+                "write_disposition": write_disposition,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
