@@ -84,8 +84,10 @@ class WriteBigQuery(beam.PTransform):
     def resolve_params(self):
         if self.streaming:
             create_disposition = BigQueryDisposition.CREATE_NEVER
+            write_disposition = BigQueryDisposition.WRITE_APPEND
         else:
             create_disposition = BigQueryDisposition.CREATE_IF_NEEDED
+            write_disposition = BigQueryDisposition.WRITE_TRUNCATE
 
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
@@ -101,7 +103,7 @@ class WriteBigQuery(beam.PTransform):
             return {
                 "method": WriteToBigQuery.Method.FILE_LOADS,
                 "create_disposition": create_disposition,
-                "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
+                "write_disposition": write_disposition,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
                 "triggering_frequency": self.triggering_frequency
             }
