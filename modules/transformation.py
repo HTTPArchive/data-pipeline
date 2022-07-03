@@ -81,6 +81,10 @@ class WriteBigQuery(beam.PTransform):
         self.method = method
         self.triggering_frequency = triggering_frequency
 
+        # set a 15-minute default for triggering_frequency for streaming pipelines with BigQuery file loads
+        if self.streaming and self.method == WriteToBigQuery.Method.FILE_LOADS and self.triggering_frequency is None:
+            self.triggering_frequency = 15
+
     def resolve_params(self):
         # workaround/temporary - never create tables when streaming
         # to avoid thundering herd issues where multiple workers attempt to create tables concurrently
