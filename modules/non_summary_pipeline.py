@@ -418,6 +418,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         dataset_requests_home_only,
         dataset_response_bodies_home_only,
         label=None,
+        triggering_frequency=None,
         **kwargs,
     ):
         # TODO(BEAM-6158): Revert the workaround once we can pickle super() on py3.
@@ -427,6 +428,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
 
         self.streaming = streaming
         self.big_query_write_method = big_query_write_method
+        self.triggering_frequency = triggering_frequency
         self.partitions = partitions
         self.dataset_pages = dataset_pages
         self.dataset_technologies = dataset_technologies
@@ -453,6 +455,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         #     schema=schema,
         #     streaming=self.streaming,
         #     method=method if method else self.big_query_write_method,
+        #     triggering_frequency = self.triggering_frequency,
         # )
 
         home_only_rows | f"Write{formatted_name}Home{index}" >> transformation.WriteBigQuery(
@@ -460,6 +463,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
             schema=schema,
             streaming=self.streaming,
             method=method if method else self.big_query_write_method,
+            triggering_frequency=self.triggering_frequency,
         )
 
     def expand(self, hars):

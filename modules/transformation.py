@@ -73,12 +73,13 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None, method=None):
+    def __init__(self, table, schema, streaming=None, method=None, triggering_frequency=None):
         super().__init__()
         self.table = table
         self.schema = schema
         self.streaming = streaming
         self.method = method
+        self.triggering_frequency = triggering_frequency
 
     def resolve_params(self):
         if self.streaming:
@@ -94,6 +95,7 @@ class WriteBigQuery(beam.PTransform):
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
+                "triggering_frequency": self.triggering_frequency,
             }
         if self.method == WriteToBigQuery.Method.FILE_LOADS:
             return {
@@ -101,7 +103,7 @@ class WriteBigQuery(beam.PTransform):
                 "create_disposition": create_disposition,
                 "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
-                "triggering_frequency": 10 if self.streaming else None
+                "triggering_frequency": self.triggering_frequency
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")
