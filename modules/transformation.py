@@ -82,18 +82,18 @@ class WriteBigQuery(beam.PTransform):
         self.triggering_frequency = triggering_frequency
 
     def resolve_params(self):
+        # workaround/temporary - never create tables when streaming
+        # to avoid thundering herd issues where multiple workers attempt to create tables concurrently
         if self.streaming:
             create_disposition = BigQueryDisposition.CREATE_NEVER
-            write_disposition = BigQueryDisposition.WRITE_APPEND
         else:
             create_disposition = BigQueryDisposition.CREATE_IF_NEEDED
-            write_disposition = BigQueryDisposition.WRITE_TRUNCATE
 
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
                 "method": WriteToBigQuery.Method.STREAMING_INSERTS,
                 "create_disposition": create_disposition,
-                "write_disposition": write_disposition,
+                "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
@@ -103,7 +103,7 @@ class WriteBigQuery(beam.PTransform):
             return {
                 "method": WriteToBigQuery.Method.FILE_LOADS,
                 "create_disposition": create_disposition,
-                "write_disposition": write_disposition,
+                "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
                 "triggering_frequency": self.triggering_frequency
             }
