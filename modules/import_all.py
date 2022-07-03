@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from copy import deepcopy
+from functools import partial
 from hashlib import sha256
 
 import apache_beam as beam
@@ -14,10 +15,12 @@ from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions
 
 from modules import constants, utils, transformation
-from modules.transformation import ReadHarFiles, add_common_pipeline_options
+from modules.transformation import ReadHarFiles, add_common_pipeline_options, HarJsonToSummary
 
-# BigQuery can handle rows up to 100 MB.
-MAX_CONTENT_SIZE = 10 * 1024 * 1024
+# BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.FILE_LOADS`
+MAX_CONTENT_SIZE_100_MB = 10 * 1024 * 1024
+# BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.STREAMING_INSERTS`
+MAX_CONTENT_SIZE_10_MB = 1024 * 1024
 # Number of times to partition the requests tables.
 NUM_PARTITIONS = 4
 
@@ -43,7 +46,7 @@ def partition_step(function, har, client, crawl_date, index):
     return function(har, client, crawl_date)
 
 
-def get_page(file_name, har):
+def get_page(max_content_size, file_name, har):
     """Parses the page from a HAR object."""
 
     if not har:
@@ -77,16 +80,21 @@ def get_page(file_name, har):
         return
 
     payload_size = len(payload_json)
-    if payload_size > MAX_CONTENT_SIZE:
+    if payload_size > max_content_size:
         logging.warning('Skipping pages payload for "%s": '
                         'payload size (%s) exceeds the maximum content size of %s bytes.',
-                        wptid, payload_size, MAX_CONTENT_SIZE)
+                        wptid, payload_size, max_content_size)
         return
 
     custom_metrics = get_custom_metrics(page, wptid)
-    lighthouse = get_lighthouse_reports(har, wptid)
+    lighthouse = get_lighthouse_reports(har, wptid, max_content_size)
     features = get_features(page, wptid)
     technologies = get_technologies(page)
+
+    summary_page, _ = HarJsonToSummary.generate_pages(file_name, har)
+    wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_pages"]["fields"]]
+    summary_page = utils.dict_subset(summary_page, wanted_summary_fields)
+    summary_page = json.dumps(summary_page)
 
     return [{
         'date': date,
@@ -97,8 +105,7 @@ def get_page(file_name, har):
         'rank': rank,
         'wptid': wptid,
         'payload': payload_json,
-        # TODO: Integrate with the summary pipeline.
-        'summary': '',
+        'summary': summary_page,
         'custom_metrics': custom_metrics,
         'lighthouse': lighthouse,
         'features': features,
@@ -234,7 +241,7 @@ def get_technologies(page):
     return list(technologies.values())
 
 
-def get_lighthouse_reports(har, wptid):
+def get_lighthouse_reports(har, wptid, max_content_size):
     """Parses Lighthouse results from a HAR object."""
 
     if not har:
@@ -255,10 +262,10 @@ def get_lighthouse_reports(har, wptid):
         return
 
     report_size = len(report_json)
-    if report_size > MAX_CONTENT_SIZE:
+    if report_size > max_content_size:
         logging.warning('Skipping Lighthouse report for %s: '
                         'Report size (%s) exceeded maximum content size of %s bytes.',
-                        wptid, report_size, MAX_CONTENT_SIZE)
+                        wptid, report_size, max_content_size)
         return
 
     return report_json
@@ -286,7 +293,7 @@ def get_lighthouse_reports(har, wptid):
 #     return get_requests(har, client, crawl_date)
 
 
-def get_requests(file_name, har):
+def get_requests(max_content_size, file_name, har):
     """Parses the requests from the HAR."""
 
     if not har:
@@ -299,6 +306,7 @@ def get_requests(file_name, har):
     date = "{:%Y-%m-%d}".format(date)
     is_root_page = True
     root_page = page_url
+    wptid = page.get('testID')
 
     metadata = page.get('_metadata')
     if metadata:
@@ -341,10 +349,10 @@ def get_requests(file_name, har):
             continue
 
         payload_size = len(payload)
-        if payload_size > MAX_CONTENT_SIZE:
+        if payload_size > max_content_size:
             logging.warning('Skipping requests payload for "%s": '
                             'payload size (%s) exceeded maximum content size of %s bytes.',
-                            request_url, payload_size, MAX_CONTENT_SIZE)
+                            request_url, payload_size, max_content_size)
             continue
 
         response_body = None
@@ -352,11 +360,17 @@ def get_requests(file_name, har):
             response_body = request.get('response').get('content').get('text', None)
 
             if response_body is not None:
-                response_body = response_body[:MAX_CONTENT_SIZE]
+                response_body = response_body[:max_content_size]
 
         mime_type = request.get('response').get('content').get('mimeType')
         ext = utils.get_ext(request_url)
         type = utils.pretty_type(mime_type, ext)
+
+        status_info = HarJsonToSummary.initialize_status_info(file_name, page)
+        summary_request, _, _, _ = HarJsonToSummary.summarize_entry(request, "", "", 0, status_info)
+        wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_requests"]["fields"]]
+        summary_request = utils.dict_subset(summary_request, wanted_summary_fields)
+        summary_request = json.dumps(summary_request)
 
         requests.append({
             'date': date,
@@ -369,11 +383,11 @@ def get_requests(file_name, har):
             'type': type,
             'index': index,
             'payload': payload,
-            # TODO: Get the summary data.
-            'summary': '',
+            'summary': summary_request,
             'request_headers': request_headers,
             'response_headers': response_headers,
-            'response_body': response_body
+            'response_body': response_body,
+            'wptid': wptid
         })
 
     return requests
@@ -452,6 +466,13 @@ def from_json(file_name, string):
         return None, None
 
 
+def log_size(typ, max_content_size, data):
+    size = len(json.dumps(data).encode("utf-8"))
+    if size >= max_content_size:
+        logging.warning(f"Size greater than {max_content_size} bytes on {typ} for {data['wptid']}: {size}")
+    return data
+
+
 class AllPipelineOptions(PipelineOptions):
 
     @classmethod
@@ -480,7 +501,7 @@ class AllPipelineOptions(PipelineOptions):
             dest="method",
             help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
             choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+            default=WriteToBigQuery.Method.FILE_LOADS,
         )
 
 
@@ -495,6 +516,11 @@ def create_pipeline(argv=None):
         f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()}"
     )
 
+    if all_pipeline_options.method == WriteToBigQuery.Method.STREAMING_INSERTS:
+        max_content_size = MAX_CONTENT_SIZE_10_MB
+    else:
+        max_content_size = MAX_CONTENT_SIZE_100_MB
+
     pipeline = beam.Pipeline(options=pipeline_options)
 
     hars = (
@@ -506,7 +532,8 @@ def create_pipeline(argv=None):
     # TODO consider re-adding partitions
     _ = (
         hars
-        | "MapPages" >> beam.FlatMapTuple(get_page)
+        | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
+        | "LogPagesSize" >> beam.Map(partial(log_size, "page", max_content_size))
         | "WritePages" >> transformation.WriteBigQuery(
             table=all_pipeline_options.dataset_all_pages,
             schema=constants.BIGQUERY["schemas"]["all_pages"],
@@ -516,7 +543,8 @@ def create_pipeline(argv=None):
 
     _ = (
         hars
-        | "MapRequests" >> beam.FlatMapTuple(get_requests)
+        | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
+        | "LogRequestsSize" >> beam.Map(partial(log_size, "request", max_content_size))
         | "WriteRequests" >> transformation.WriteBigQuery(
             table=all_pipeline_options.dataset_all_requests,
             schema=constants.BIGQUERY["schemas"]["all_requests"],

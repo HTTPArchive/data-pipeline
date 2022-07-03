@@ -10,6 +10,17 @@ from modules import constants
 BIGQUERY_MAX_INT = 2**63 - 1
 
 
+def dict_subset(original_dict, wanted_keys):
+    if original_dict is None:
+        return None
+
+    new_dict = dict()
+    for k, v in original_dict.items():
+        if k.lower() in map(str.lower, wanted_keys):
+            new_dict[k] = v
+    return new_dict
+
+
 def remove_empty_keys(d):
     return {k: v for k, v in d if v is not None}
 
