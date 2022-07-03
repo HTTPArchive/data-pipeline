@@ -50,7 +50,7 @@ class CombinedPipelineOptions(PipelineOptions):
             dest="big_query_write_method",
             help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
             choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+            default=WriteToBigQuery.Method.FILE_LOADS,
         )
         parser.add_argument(
             "--big_query_triggering_frequency",
