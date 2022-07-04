@@ -8,6 +8,7 @@ from copy import deepcopy
 from hashlib import sha256
 
 import apache_beam as beam
+from apache_beam.io import WriteToBigQuery
 
 from modules import utils, constants, transformation
 
@@ -417,6 +418,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         dataset_requests_home_only,
         dataset_response_bodies_home_only,
         label=None,
+        triggering_frequency=None,
         **kwargs,
     ):
         # TODO(BEAM-6158): Revert the workaround once we can pickle super() on py3.
@@ -426,6 +428,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
 
         self.streaming = streaming
         self.big_query_write_method = big_query_write_method
+        self.triggering_frequency = triggering_frequency
         self.partitions = partitions
         self.dataset_pages = dataset_pages
         self.dataset_technologies = dataset_technologies
@@ -439,7 +442,7 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         self.dataset_response_bodies_home = dataset_response_bodies_home_only
 
     def _transform_and_write_partition(
-        self, pcoll, name, index, fn, table_all, table_home, schema
+        self, pcoll, name, index, fn, table_all, table_home, schema, method=None
     ):
         formatted_name = utils.title_case_beam_transform_name(name)
 
@@ -447,18 +450,12 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
 
         home_only_rows = all_rows | f"Filter{formatted_name}{index}" >> beam.Filter(is_home_page)
 
-        all_rows | f"Write{formatted_name}All{index}" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, table_all),
-            schema=schema,
-            streaming=self.streaming,
-            method=self.big_query_write_method,
-        )
-
         home_only_rows | f"Write{formatted_name}Home{index}" >> transformation.WriteBigQuery(
             table=lambda row: utils.format_table_name(row, table_home),
             schema=schema,
             streaming=self.streaming,
-            method=self.big_query_write_method,
+            method=method if method else self.big_query_write_method,
+            triggering_frequency=self.triggering_frequency,
         )
 
     def expand(self, hars):
@@ -520,4 +517,6 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 table_all=self.dataset_response_bodies,
                 table_home=self.dataset_response_bodies_home,
                 schema=constants.BIGQUERY["schemas"]["response_bodies"],
+                # special case, always use FILE_LOADS to avoid row size limits
+                method=WriteToBigQuery.Method.FILE_LOADS
             )
