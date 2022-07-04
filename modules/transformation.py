@@ -73,29 +73,43 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None, method=None):
+    def __init__(self, table, schema, streaming=None, method=None, triggering_frequency=None):
         super().__init__()
         self.table = table
         self.schema = schema
         self.streaming = streaming
         self.method = method
+        self.triggering_frequency = triggering_frequency
+
+        # set a 15-minute default for triggering_frequency for streaming pipelines with BigQuery file loads
+        if self.streaming and self.method == WriteToBigQuery.Method.FILE_LOADS and self.triggering_frequency is None:
+            self.triggering_frequency = 15 * 60
 
     def resolve_params(self):
+        # workaround/temporary - never create tables when streaming
+        # to avoid thundering herd issues where multiple workers attempt to create tables concurrently
+        if self.streaming:
+            create_disposition = BigQueryDisposition.CREATE_NEVER
+        else:
+            create_disposition = BigQueryDisposition.CREATE_IF_NEEDED
+
         if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
             return {
                 "method": WriteToBigQuery.Method.STREAMING_INSERTS,
-                "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
+                "create_disposition": create_disposition,
                 "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
+                "triggering_frequency": self.triggering_frequency,
             }
         if self.method == WriteToBigQuery.Method.FILE_LOADS:
             return {
                 "method": WriteToBigQuery.Method.FILE_LOADS,
-                "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
-                "write_disposition": BigQueryDisposition.WRITE_TRUNCATE,
+                "create_disposition": create_disposition,
+                "write_disposition": BigQueryDisposition.WRITE_APPEND,
                 "additional_bq_parameters": {"ignoreUnknownValues": True},
+                "triggering_frequency": self.triggering_frequency
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")

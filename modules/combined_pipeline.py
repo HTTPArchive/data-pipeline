@@ -50,7 +50,15 @@ class CombinedPipelineOptions(PipelineOptions):
             dest="big_query_write_method",
             help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
             choices=bq_write_methods,
-            default=WriteToBigQuery.Method.STREAMING_INSERTS,
+            default=WriteToBigQuery.Method.FILE_LOADS,
+        )
+        parser.add_argument(
+            "--big_query_triggering_frequency",
+            dest="triggering_frequency",
+            help="When method is FILE_LOADS: Value will be converted to int. Every triggering_frequency seconds, a "
+            "BigQuery load job will be triggered for all the data written since the last load job.\n"
+            "When method is STREAMING_INSERTS and with_auto_sharding=True: A streaming inserts batch will be "
+            "submitted at least every triggering_frequency seconds when data is waiting."
         )
 
         parser.add_argument(
@@ -159,11 +167,11 @@ def create_pipeline(argv=None):
         ).with_outputs("page", "requests")
 
         pages | summary_pipeline.WriteSummaryPagesToBigQuery(
-            combined_options, standard_options
+            combined_options, standard_options, **combined_options.get_all_options()
         )
 
         requests | summary_pipeline.WriteSummaryRequestsToBigQuery(
-            combined_options, standard_options
+            combined_options, standard_options, **combined_options.get_all_options()
         )
 
     # non-summary pipeline
