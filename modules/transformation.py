@@ -194,13 +194,13 @@ class HarJsonToSummary:
             logging.warning("HAR file read error.")
             return None, None
 
-        if type(element) is str:
+        if isinstance(element, str):
             try:
                 har = json.loads(element)
             except json.JSONDecodeError:
                 logging.warning(f"JSON decode failed for: {file_name}")
                 return None, None
-        elif type(element) is dict:
+        elif isinstance(element, dict):
             har = element
         else:
             logging.exception(f"Unexpected type for: {file_name}")
