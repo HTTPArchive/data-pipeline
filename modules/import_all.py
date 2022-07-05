@@ -124,9 +124,15 @@ def get_page(max_content_size, file_name, har):
 def get_custom_metrics(page, wptid):
     """ Transforms the page data into a custom metrics object. """
 
+    page_metrics = page.get("_custom")
+
+    if not page_metrics:
+        logging.warning(f"No `_custom` attribute in page for {wptid=}")
+        return None
+
     custom_metrics = {}
 
-    for metric in page.get('_custom'):
+    for metric in page_metrics:
         value = page.get(f'_{metric}')
 
         if isinstance(value, str):
