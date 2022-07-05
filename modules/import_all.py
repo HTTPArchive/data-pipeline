@@ -96,7 +96,7 @@ def get_page(max_content_size, file_name, har):
         summary_page, _ = HarJsonToSummary.generate_pages(file_name, har)
         wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_pages"]["fields"]]
         summary_page = utils.dict_subset(summary_page, wanted_summary_fields)
-        summary_page = json.dumps(summary_page)
+        summary_page = to_json(summary_page)
     except Exception:
         logging.exception(
             f"Unable to unpack HAR, check previous logs for detailed errors. "
@@ -385,7 +385,7 @@ def get_requests(max_content_size, file_name, har):
             summary_request, _, _, _ = HarJsonToSummary.summarize_entry(request, "", "", 0, status_info)
             wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_requests"]["fields"]]
             summary_request = utils.dict_subset(summary_request, wanted_summary_fields)
-            summary_request = json.dumps(summary_request)
+            summary_request = to_json(summary_request)
         except Exception:
             logging.exception(
                 f"Unable to unpack HAR, check previous logs for detailed errors. "
