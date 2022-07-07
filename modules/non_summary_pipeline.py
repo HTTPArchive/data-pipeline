@@ -354,11 +354,11 @@ def get_parsed_css(har):
     if not page_url:
         logging.warning("Skipping parsed CSS, no page URL")
         return None
-    
+
     metadata = get_metadata(har)
     if metadata:
         page_url = metadata.get("tested_url", page_url)
-    
+
     is_root_page = is_home_page(har)
 
     custom_metric = page.get("_parsed_css")
@@ -383,7 +383,7 @@ def get_parsed_css(har):
             "url": url,
             "css": ast
         })
-    
+
     return parsed_css
 
 

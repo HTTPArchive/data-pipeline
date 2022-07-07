@@ -24,6 +24,7 @@ BIGQUERY = {
         "lighthouse_home": "httparchive:lighthouse",
         "requests_home": "httparchive:requests",
         "response_bodies_home": "httparchive:response_bodies",
+        "parsed_css_home": "httparchive:experimental_parsed_css",
     },
     "schemas": {
         "summary_pages": {"fields": _get_schema("summary_pages.json")},

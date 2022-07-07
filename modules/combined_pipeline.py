@@ -111,7 +111,7 @@ class CombinedPipelineOptions(PipelineOptions):
         parser.add_argument(
             "--dataset_parsed_css_home_only",
             help="BigQuery dataset to write parsed_css table (home-page-only)",
-            default=constants.BIGQUERY["datasets"]["parsed_css_all"],
+            default=constants.BIGQUERY["datasets"]["parsed_css_home"],
         )
         parser.add_argument(
             "--dataset_pages",
