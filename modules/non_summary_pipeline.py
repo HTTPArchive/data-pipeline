@@ -377,13 +377,22 @@ def get_parsed_css(har):
             # Skip inline styles for now. They're special.
             continue
 
+        try:
+            ast_json = to_json(ast)
+        except Exception:
+            logging.warning(
+                'Unable to stringify parsed CSS to JSON for "%s".'
+                % page_url
+            )
+            continue
+
         parsed_css.append({
             "date": har["date"],
             "client": har["client"],
             "page": page_url,
             "is_root_page": is_root_page,
             "url": url,
-            "css": ast
+            "css": ast_json
         })
 
     return parsed_css
