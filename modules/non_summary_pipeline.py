@@ -342,6 +342,51 @@ def get_lighthouse_reports(har):
     ]
 
 
+def get_parsed_css(har):
+    """Extracts the parsed CSS custom metric from the HAR."""
+
+    if not har:
+        return None
+
+    page = har.get("log").get("pages")[0]
+    page_url = get_page_url(har)
+
+    if not page_url:
+        logging.warning("Skipping parsed CSS, no page URL")
+        return None
+    
+    metadata = get_metadata(har)
+    if metadata:
+        page_url = metadata.get("tested_url", page_url)
+    
+    is_root_page = is_home_page(har)
+
+    custom_metric = page.get("_parsed_css")
+
+    if not custom_metric:
+        logging.warning("No parsed CSS data for page %s", page_url)
+        return None
+
+    parsed_css = []
+
+    for entry in custom_metric:
+        url = entry.get("url")
+        ast = entry.get("ast")
+
+        if url == 'inline':
+            # Skip inline styles for now. They're special.
+            continue
+
+        parsed_css.append({
+            "page": page_url,
+            "is_root_page": is_root_page,
+            "url": url,
+            "css": ast
+        })
+    
+    return parsed_css
+
+
 def to_json(obj):
     """Returns a JSON representation of the object.
 
@@ -412,11 +457,13 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         dataset_lighthouse,
         dataset_requests,
         dataset_response_bodies,
+        dataset_parsed_css,
         dataset_pages_home_only,
         dataset_technologies_home_only,
         dataset_lighthouse_home_only,
         dataset_requests_home_only,
         dataset_response_bodies_home_only,
+        dataset_parsed_css_home_only,
         label=None,
         triggering_frequency=None,
         **kwargs,
@@ -435,11 +482,13 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
         self.dataset_lighthouse = dataset_lighthouse
         self.dataset_requests = dataset_requests
         self.dataset_response_bodies = dataset_response_bodies
+        self.dataset_parsed_css = dataset_parsed_css
         self.dataset_pages_home = dataset_pages_home_only
         self.dataset_technologies_home = dataset_technologies_home_only
         self.dataset_lighthouse_home = dataset_lighthouse_home_only
         self.dataset_requests_home = dataset_requests_home_only
         self.dataset_response_bodies_home = dataset_response_bodies_home_only
+        self.dataset_parsed_css_home = dataset_parsed_css_home_only
 
     def _transform_and_write_partition(
         self, pcoll, name, index, fn, table_all, table_home, schema, method=None
@@ -519,4 +568,14 @@ class WriteNonSummaryToBigQuery(beam.PTransform):
                 schema=constants.BIGQUERY["schemas"]["response_bodies"],
                 # special case, always use FILE_LOADS to avoid row size limits
                 method=WriteToBigQuery.Method.FILE_LOADS
+            )
+
+            self._transform_and_write_partition(
+                pcoll=partitions[idx],
+                name="parsed_css",
+                index=idx,
+                fn=get_parsed_css,
+                table_all=self.dataset_parsed_css,
+                table_home=self.dataset_parsed_css_home,
+                schema=constants.BIGQUERY["schemas"]["parsed_css"],
             )
