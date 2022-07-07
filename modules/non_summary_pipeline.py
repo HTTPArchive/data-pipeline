@@ -378,6 +378,8 @@ def get_parsed_css(har):
             continue
 
         parsed_css.append({
+            "date": har["date"],
+            "client": har["client"],
             "page": page_url,
             "is_root_page": is_root_page,
             "url": url,
