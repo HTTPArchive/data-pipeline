@@ -21,29 +21,6 @@ from modules.transformation import ReadHarFiles, add_common_pipeline_options, Ha
 MAX_CONTENT_SIZE_100_MB = 10 * 1024 * 1024
 # BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.STREAMING_INSERTS`
 MAX_CONTENT_SIZE_10_MB = 1024 * 1024
-# Number of times to partition the requests tables.
-NUM_PARTITIONS = 4
-
-
-def partition_step(function, har, client, crawl_date, index):
-    """Partitions functions across multiple concurrent steps."""
-
-    if not har:
-        logging.warning('Unable to partition step, null HAR.')
-        return
-
-    page = har.get('log', {}).get('pages', [{}])[0]
-    page_url = page.get('_URL')
-
-    if not page_url:
-        logging.warning('Skipping HAR: unable to get page URL (see preceding warning).')
-        return
-
-    hashed_url = hash_url(page_url)
-    if hashed_url % NUM_PARTITIONS != index:
-        return
-
-    return function(har, client, crawl_date)
 
 
 def get_page(max_content_size, file_name, har):
@@ -282,28 +259,6 @@ def get_lighthouse_reports(har, wptid, max_content_size):
         return
 
     return report_json
-
-
-# def partition_requests(har, client, crawl_date, index):
-#     """Partitions requests across multiple concurrent steps."""
-#
-#     if not har:
-#         return
-#
-#     page = har.get('log').get('pages')[0]
-#     page_url = page.get('_URL')
-#
-#     if hash_url(page_url) % NUM_PARTITIONS != index:
-#         return
-#
-#     metadata = page.get('_metadata')
-#     if metadata:
-#         # The page URL from metadata is more accurate.
-#         # See https://github.com/HTTPArchive/data-pipeline/issues/48
-#         page_url = metadata.get('tested_url', page_url)
-#         client = metadata.get('layout', client).lower()
-#
-#     return get_requests(har, client, crawl_date)
 
 
 def get_requests(max_content_size, file_name, har):
