@@ -27,7 +27,7 @@ def get_page(max_content_size, file_name, har):
     """Parses the page from a HAR object."""
 
     if not har:
-        return
+        return None
 
     date, client = utils.date_and_client_from_file_name(file_name)
 
@@ -54,14 +54,14 @@ def get_page(max_content_size, file_name, har):
         payload_json = to_json(page)
     except ValueError:
         logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', wptid)
-        return
+        return None
 
     payload_size = len(payload_json)
     if payload_size > max_content_size:
         logging.warning('Skipping pages payload for "%s": '
                         'payload size (%s) exceeds the maximum content size of %s bytes.',
                         wptid, payload_size, max_content_size)
-        return
+        return None
 
     custom_metrics = get_custom_metrics(page, wptid)
     lighthouse = get_lighthouse_reports(har, wptid, max_content_size)
@@ -128,7 +128,7 @@ def get_custom_metrics(page, wptid):
         custom_metrics_json = to_json(custom_metrics)
     except UnicodeEncodeError:
         logging.warning('Unable to JSON encode custom metrics for %s', wptid)
-        return
+        return None
 
     return custom_metrics_json
 
@@ -137,12 +137,12 @@ def get_features(page, wptid):
     """Parses the features from a page."""
 
     if not page:
-        return
+        return None
 
     blink_features = page.get('_blinkFeatureFirstUsed')
 
     if not blink_features:
-        return
+        return None
 
     def get_feature_names(feature_map, feature_type):
         feature_names = []
@@ -188,7 +188,7 @@ def get_technologies(page):
     """Parses the technologies from a page."""
 
     if not page:
-        return
+        return None
 
     app_names = page.get('_detected_apps', {})
     categories = page.get('_detected', {})
@@ -235,12 +235,12 @@ def get_lighthouse_reports(har, wptid, max_content_size):
     """Parses Lighthouse results from a HAR object."""
 
     if not har:
-        return
+        return None
 
     report = har.get('_lighthouse')
 
     if not report:
-        return
+        return None
 
     # Omit large UGC.
     report.get('audits').get('screenshot-thumbnails', {}).get('details', {}).pop('items', None)
@@ -249,14 +249,14 @@ def get_lighthouse_reports(har, wptid, max_content_size):
         report_json = to_json(report)
     except ValueError:
         logging.warning('Skipping Lighthouse report for %s: unable to stringify as JSON.', wptid)
-        return
+        return None
 
     report_size = len(report_json)
     if report_size > max_content_size:
         logging.warning('Skipping Lighthouse report for %s: '
                         'Report size (%s) exceeded maximum content size of %s bytes.',
                         wptid, report_size, max_content_size)
-        return
+        return None
 
     return report_json
 
@@ -265,7 +265,7 @@ def get_requests(max_content_size, file_name, har):
     """Parses the requests from the HAR."""
 
     if not har:
-        return
+        return None
 
     date, client = utils.date_and_client_from_file_name(file_name)
 
