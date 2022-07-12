@@ -15,7 +15,11 @@ from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions
 
 from modules import constants, utils, transformation
-from modules.transformation import ReadHarFiles, add_common_pipeline_options, HarJsonToSummary
+from modules.transformation import (
+    ReadHarFiles,
+    add_common_pipeline_options,
+    HarJsonToSummary,
+)
 
 # BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.FILE_LOADS`
 MAX_CONTENT_SIZE_100_MB = 10 * 1024 * 1024
@@ -31,36 +35,42 @@ def get_page(max_content_size, file_name, har):
 
     date, client = utils.date_and_client_from_file_name(file_name)
 
-    page = har.get('log').get('pages')[0]
-    url = page.get('_URL')
-    wptid = page.get('testID')
+    page = har.get("log").get("pages")[0]
+    url = page.get("_URL")
+    wptid = page.get("testID")
     date = "{:%Y-%m-%d}".format(date)
     is_root_page = True
     root_page = url
     rank = None
 
-    metadata = page.get('_metadata')
+    metadata = page.get("_metadata")
     if metadata:
         # The page URL from metadata is more accurate.
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
-        url = metadata.get('tested_url', url)
-        client = metadata.get('layout', client).lower()
-        is_root_page = metadata.get('crawl_depth', 0) == 0
-        root_page = metadata.get('root_page_url', url)
-        rank = int(metadata.get('rank')) if metadata.get('rank') else None
+        url = metadata.get("tested_url", url)
+        client = metadata.get("layout", client).lower()
+        is_root_page = metadata.get("crawl_depth", 0) == 0
+        root_page = metadata.get("root_page_url", url)
+        rank = int(metadata.get("rank")) if metadata.get("rank") else None
 
     try:
         page = trim_page(page)
         payload_json = to_json(page)
     except ValueError:
-        logging.warning('Skipping pages payload for "%s": unable to stringify as JSON.', wptid)
+        logging.warning(
+            'Skipping pages payload for "%s": unable to stringify as JSON.', wptid
+        )
         return None
 
     payload_size = len(payload_json)
     if payload_size > max_content_size:
-        logging.warning('Skipping pages payload for "%s": '
-                        'payload size (%s) exceeds the maximum content size of %s bytes.',
-                        wptid, payload_size, max_content_size)
+        logging.warning(
+            'Skipping pages payload for "%s": '
+            "payload size (%s) exceeds the maximum content size of %s bytes.",
+            wptid,
+            payload_size,
+            max_content_size,
+        )
         return None
 
     custom_metrics = get_custom_metrics(page, wptid)
@@ -71,7 +81,10 @@ def get_page(max_content_size, file_name, har):
     summary_page = None
     try:
         summary_page, _ = HarJsonToSummary.generate_pages(file_name, har)
-        wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_pages"]["fields"]]
+        wanted_summary_fields = [
+            field["name"]
+            for field in constants.BIGQUERY["schemas"]["summary_pages"]["fields"]
+        ]
         summary_page = utils.dict_subset(summary_page, wanted_summary_fields)
         summary_page = json.dumps(summary_page)
     except Exception:
@@ -80,26 +93,28 @@ def get_page(max_content_size, file_name, har):
             f"{file_name=}, {har=}"
         )
 
-    return [{
-        'date': date,
-        'client': client,
-        'page': url,
-        'is_root_page': is_root_page,
-        'root_page': root_page,
-        'rank': rank,
-        'wptid': wptid,
-        'payload': payload_json,
-        'summary': summary_page,
-        'custom_metrics': custom_metrics,
-        'lighthouse': lighthouse,
-        'features': features,
-        'technologies': technologies,
-        'metadata': to_json(metadata)
-    }]
+    return [
+        {
+            "date": date,
+            "client": client,
+            "page": url,
+            "is_root_page": is_root_page,
+            "root_page": root_page,
+            "rank": rank,
+            "wptid": wptid,
+            "payload": payload_json,
+            "summary": summary_page,
+            "custom_metrics": custom_metrics,
+            "lighthouse": lighthouse,
+            "features": features,
+            "technologies": technologies,
+            "metadata": to_json(metadata),
+        }
+    ]
 
 
 def get_custom_metrics(page, wptid):
-    """ Transforms the page data into a custom metrics object. """
+    """Transforms the page data into a custom metrics object."""
 
     page_metrics = page.get("_custom")
 
@@ -110,16 +125,24 @@ def get_custom_metrics(page, wptid):
     custom_metrics = {}
 
     for metric in page_metrics:
-        value = page.get(f'_{metric}')
+        value = page.get(f"_{metric}")
 
         if isinstance(value, str):
             try:
                 value = json.loads(value)
             except ValueError:
-                logging.warning('ValueError: Unable to parse custom metric %s as JSON for %s', metric, wptid)
+                logging.warning(
+                    "ValueError: Unable to parse custom metric %s as JSON for %s",
+                    metric,
+                    wptid,
+                )
                 continue
             except RecursionError:
-                logging.warning('RecursionError: Unable to parse custom metric %s as JSON for %s', metric, wptid)
+                logging.warning(
+                    "RecursionError: Unable to parse custom metric %s as JSON for %s",
+                    metric,
+                    wptid,
+                )
                 continue
 
         custom_metrics[metric] = value
@@ -127,7 +150,7 @@ def get_custom_metrics(page, wptid):
     try:
         custom_metrics_json = to_json(custom_metrics)
     except UnicodeEncodeError:
-        logging.warning('Unable to JSON encode custom metrics for %s', wptid)
+        logging.warning("Unable to JSON encode custom metrics for %s", wptid)
         return None
 
     return custom_metrics_json
@@ -139,7 +162,7 @@ def get_features(page, wptid):
     if not page:
         return None
 
-    blink_features = page.get('_blinkFeatureFirstUsed')
+    blink_features = page.get("_blinkFeatureFirstUsed")
 
     if not blink_features:
         return None
@@ -149,39 +172,37 @@ def get_features(page, wptid):
 
         try:
             for (key, value) in feature_map.items():
-                if value.get('name'):
-                    feature_names.append({
-                        'feature': value.get('name'),
-                        'type': feature_type,
-                        'id': key
-                    })
+                if value.get("name"):
+                    feature_names.append(
+                        {"feature": value.get("name"), "type": feature_type, "id": key}
+                    )
                     continue
 
                 match = id_pattern.match(key)
                 if match:
-                    feature_names.append({
-                        'feature': '',
-                        'type': feature_type,
-                        'id': match.group(1)
-                    })
+                    feature_names.append(
+                        {"feature": "", "type": feature_type, "id": match.group(1)}
+                    )
                     continue
 
-                feature_names.append({
-                    'feature': key,
-                    'type': feature_type,
-                    'id': ''
-                })
+                feature_names.append({"feature": key, "type": feature_type, "id": ""})
         except ValueError:
-            logging.warning('Unable to get feature names for %s. Feature_type: %s, feature_map: %s',
-                            wptid, feature_type, feature_map)
+            logging.warning(
+                "Unable to get feature names for %s. Feature_type: %s, feature_map: %s",
+                wptid,
+                feature_type,
+                feature_map,
+            )
 
         return feature_names
 
-    id_pattern = re.compile(r'^Feature_(\d+)$')
+    id_pattern = re.compile(r"^Feature_(\d+)$")
 
-    return get_feature_names(blink_features.get('Features'), 'default') + \
-        get_feature_names(blink_features.get('CSSFeatures'), 'css') + \
-        get_feature_names(blink_features.get('AnimatedCSSFeatures'), 'animated-css')
+    return (
+        get_feature_names(blink_features.get("Features"), "default")
+        + get_feature_names(blink_features.get("CSSFeatures"), "css")
+        + get_feature_names(blink_features.get("AnimatedCSSFeatures"), "animated-css")
+    )
 
 
 def get_technologies(page):
@@ -190,8 +211,8 @@ def get_technologies(page):
     if not page:
         return None
 
-    app_names = page.get('_detected_apps', {})
-    categories = page.get('_detected', {})
+    app_names = page.get("_detected_apps", {})
+    categories = page.get("_detected", {})
 
     # When there are no detected apps, it appears as an empty array.
     if isinstance(app_names, list):
@@ -205,28 +226,26 @@ def get_technologies(page):
             continue
 
         # There may be multiple info values. Add each to the map.
-        for info in info_list.split(','):
-            app_id = f'{app} {info}' if len(info) > 0 else app
+        for info in info_list.split(","):
+            app_id = f"{app} {info}" if len(info) > 0 else app
             app_map[app_id] = app
 
     for category, apps in categories.items():
-        for app_id in apps.split(','):
+        for app_id in apps.split(","):
             app = app_map.get(app_id)
-            info = ''
+            info = ""
             if app is None:
                 app = app_id
             else:
-                info = app_id[len(app):].strip()
+                info = app_id[len(app) :].strip()
 
-            technologies[app] = technologies.get(app, {
-                'technology': app,
-                'info': [],
-                'categories': []
-            })
+            technologies[app] = technologies.get(
+                app, {"technology": app, "info": [], "categories": []}
+            )
 
-            technologies.get(app).get('info').append(info)
-            if category not in technologies.get(app).get('categories'):
-                technologies.get(app).get('categories').append(category)
+            technologies.get(app).get("info").append(info)
+            if category not in technologies.get(app).get("categories"):
+                technologies.get(app).get("categories").append(category)
 
     return list(technologies.values())
 
@@ -237,25 +256,33 @@ def get_lighthouse_reports(har, wptid, max_content_size):
     if not har:
         return None
 
-    report = har.get('_lighthouse')
+    report = har.get("_lighthouse")
 
     if not report:
         return None
 
     # Omit large UGC.
-    report.get('audits').get('screenshot-thumbnails', {}).get('details', {}).pop('items', None)
+    report.get("audits").get("screenshot-thumbnails", {}).get("details", {}).pop(
+        "items", None
+    )
 
     try:
         report_json = to_json(report)
     except ValueError:
-        logging.warning('Skipping Lighthouse report for %s: unable to stringify as JSON.', wptid)
+        logging.warning(
+            "Skipping Lighthouse report for %s: unable to stringify as JSON.", wptid
+        )
         return None
 
     report_size = len(report_json)
     if report_size > max_content_size:
-        logging.warning('Skipping Lighthouse report for %s: '
-                        'Report size (%s) exceeded maximum content size of %s bytes.',
-                        wptid, report_size, max_content_size)
+        logging.warning(
+            "Skipping Lighthouse report for %s: "
+            "Report size (%s) exceeded maximum content size of %s bytes.",
+            wptid,
+            report_size,
+            max_content_size,
+        )
         return None
 
     return report_json
@@ -269,76 +296,89 @@ def get_requests(max_content_size, file_name, har):
 
     date, client = utils.date_and_client_from_file_name(file_name)
 
-    page = har.get('log').get('pages')[0]
-    page_url = page.get('_URL')
+    page = har.get("log").get("pages")[0]
+    page_url = page.get("_URL")
     date = "{:%Y-%m-%d}".format(date)
     is_root_page = True
     root_page = page_url
-    wptid = page.get('testID')
+    wptid = page.get("testID")
 
-    metadata = page.get('_metadata')
+    metadata = page.get("_metadata")
     if metadata:
         # The page URL from metadata is more accurate.
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
-        page_url = metadata.get('tested_url', page_url)
-        client = metadata.get('layout', client).lower()
-        is_root_page = metadata.get('crawl_depth', 0) == 0
-        root_page = metadata.get('root_page_url', page_url)
+        page_url = metadata.get("tested_url", page_url)
+        client = metadata.get("layout", client).lower()
+        is_root_page = metadata.get("crawl_depth", 0) == 0
+        root_page = metadata.get("root_page_url", page_url)
 
-    entries = har.get('log').get('entries')
+    entries = har.get("log").get("entries")
 
     requests = []
     index = 0
 
     for request in entries:
 
-        request_url = request.get('_full_url')
-        is_main_document = request.get('_final_base_page', False)
-        index = int(request.get('_index', index))
+        request_url = request.get("_full_url")
+        is_main_document = request.get("_final_base_page", False)
+        index = int(request.get("_index", index))
         request_headers = []
         response_headers = []
 
         index += 1
         if not request_url:
-            logging.warning('Skipping empty request URL for "%s" index %s', page_url, index)
+            logging.warning(
+                'Skipping empty request URL for "%s" index %s', page_url, index
+            )
             continue
 
-        if request.get('request') and request.get('request').get('headers'):
-            request_headers = request.get('request').get('headers')
+        if request.get("request") and request.get("request").get("headers"):
+            request_headers = request.get("request").get("headers")
 
-        if request.get('response') and request.get('response').get('headers'):
-            response_headers = request.get('response').get('headers')
+        if request.get("response") and request.get("response").get("headers"):
+            response_headers = request.get("response").get("headers")
 
         try:
             payload = to_json(trim_request(request))
         except ValueError:
-            logging.warning('Skipping requests payload for "%s": '
-                            'unable to stringify as JSON.', request_url)
+            logging.warning(
+                'Skipping requests payload for "%s": ' "unable to stringify as JSON.",
+                request_url,
+            )
             continue
 
         payload_size = len(payload)
         if payload_size > max_content_size:
-            logging.warning('Skipping requests payload for "%s": '
-                            'payload size (%s) exceeded maximum content size of %s bytes.',
-                            request_url, payload_size, max_content_size)
+            logging.warning(
+                'Skipping requests payload for "%s": '
+                "payload size (%s) exceeded maximum content size of %s bytes.",
+                request_url,
+                payload_size,
+                max_content_size,
+            )
             continue
 
         response_body = None
-        if request.get('response') and request.get('response').get('content'):
-            response_body = request.get('response').get('content').get('text', None)
+        if request.get("response") and request.get("response").get("content"):
+            response_body = request.get("response").get("content").get("text", None)
 
             if response_body is not None:
                 response_body = response_body[:max_content_size]
 
-        mime_type = request.get('response').get('content').get('mimeType')
+        mime_type = request.get("response").get("content").get("mimeType")
         ext = utils.get_ext(request_url)
         type = utils.pretty_type(mime_type, ext)
 
         summary_request = None
         try:
             status_info = HarJsonToSummary.initialize_status_info(file_name, page)
-            summary_request, _, _, _ = HarJsonToSummary.summarize_entry(request, "", "", 0, status_info)
-            wanted_summary_fields = [field["name"] for field in constants.BIGQUERY["schemas"]["summary_requests"]["fields"]]
+            summary_request, _, _, _ = HarJsonToSummary.summarize_entry(
+                request, "", "", 0, status_info
+            )
+            wanted_summary_fields = [
+                field["name"]
+                for field in constants.BIGQUERY["schemas"]["summary_requests"]["fields"]
+            ]
             summary_request = utils.dict_subset(summary_request, wanted_summary_fields)
             summary_request = json.dumps(summary_request)
         except Exception:
@@ -347,23 +387,25 @@ def get_requests(max_content_size, file_name, har):
                 f"{file_name=}, {har=}"
             )
 
-        requests.append({
-            'date': date,
-            'client': client,
-            'page': page_url,
-            'is_root_page': is_root_page,
-            'root_page': root_page,
-            'url': request_url,
-            'is_main_document': is_main_document,
-            'type': type,
-            'index': index,
-            'payload': payload,
-            'summary': summary_request,
-            'request_headers': request_headers,
-            'response_headers': response_headers,
-            'response_body': response_body,
-            'wptid': wptid
-        })
+        requests.append(
+            {
+                "date": date,
+                "client": client,
+                "page": page_url,
+                "is_root_page": is_root_page,
+                "root_page": root_page,
+                "url": request_url,
+                "is_main_document": is_main_document,
+                "type": type,
+                "index": index,
+                "payload": payload,
+                "summary": summary_request,
+                "request_headers": request_headers,
+                "response_headers": response_headers,
+                "response_body": response_body,
+                "wptid": wptid,
+            }
+        )
 
     return requests
 
@@ -371,7 +413,7 @@ def get_requests(max_content_size, file_name, har):
 def hash_url(url):
     """Hashes a given URL to a process-stable integer value."""
 
-    return int(sha256(url.encode('utf-8')).hexdigest(), 16)
+    return int(sha256(url.encode("utf-8")).hexdigest(), 16)
 
 
 def trim_request(request):
@@ -382,7 +424,7 @@ def trim_request(request):
 
     # Make a copy first so the response body can be used later.
     request = deepcopy(request)
-    request.get('response', {}).get('content', {}).pop('text', None)
+    request.get("response", {}).get("content", {}).pop("text", None)
     return request
 
 
@@ -394,7 +436,7 @@ def trim_page(page):
 
     # Make a copy first so the data can be used later.
     page = deepcopy(page)
-    page.pop('_parsed_css', None)
+    page.pop("_parsed_css", None)
     return page
 
 
@@ -427,8 +469,11 @@ def to_json(obj):
     if not obj:
         raise ValueError
 
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode(
-        'utf-8', 'surrogatepass').decode('utf-8', 'replace')
+    return (
+        json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+        .encode("utf-8", "surrogatepass")
+        .decode("utf-8", "replace")
+    )
 
 
 def from_json(file_name, string):
@@ -444,12 +489,13 @@ def from_json(file_name, string):
 def log_size(typ, max_content_size, data):
     size = len(json.dumps(data).encode("utf-8"))
     if size >= max_content_size:
-        logging.warning(f"Size greater than {max_content_size} bytes on {typ} for {data['wptid']}: {size}")
+        logging.warning(
+            f"Size greater than {max_content_size} bytes on {typ} for {data['wptid']}: {size}"
+        )
     return data
 
 
 class AllPipelineOptions(PipelineOptions):
-
     @classmethod
     def _add_argparse_args(cls, parser):
         super()._add_argparse_args(parser)
@@ -501,34 +547,43 @@ def create_pipeline(argv=None):
     hars = (
         pipeline
         | ReadHarFiles(**vars(known_args))
-        | 'MapJSON' >> beam.MapTuple(from_json)
+        | "MapJSON" >> beam.MapTuple(from_json)
     )
 
-    mapped_pages = hars | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
+    mapped_pages = hars | "MapPages" >> beam.FlatMapTuple(
+        partial(get_page, max_content_size)
+    )
 
     if logging.getLogger().isEnabledFor(logging.DEBUG):
-        mapped_pages = mapped_pages | "LogPagesSize" >> beam.Map(partial(log_size, "page", max_content_size))
-
-    _ = (
-        mapped_pages | "WritePages" >> transformation.WriteBigQuery(
-            table=all_pipeline_options.dataset_all_pages,
-            schema=constants.BIGQUERY["schemas"]["all_pages"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_pages"],
-            **all_pipeline_options.get_all_options())
+        mapped_pages = mapped_pages | "LogPagesSize" >> beam.Map(
+            partial(log_size, "page", max_content_size)
         )
 
-    mapped_requests = hars | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
+    _ = mapped_pages | "WritePages" >> transformation.WriteBigQuery(
+        table=all_pipeline_options.dataset_all_pages,
+        schema=constants.BIGQUERY["schemas"]["all_pages"],
+        additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+            "all_pages"
+        ],
+        **all_pipeline_options.get_all_options(),
+    )
+
+    mapped_requests = hars | "MapRequests" >> beam.FlatMapTuple(
+        partial(get_requests, max_content_size)
+    )
 
     if logging.getLogger().isEnabledFor(logging.DEBUG):
-        mapped_requests = mapped_requests| "LogRequestsSize" >> beam.Map(partial(log_size, "request", max_content_size))
-
-    _ = (
-        mapped_requests
-        | "WriteRequests" >> transformation.WriteBigQuery(
-            table=all_pipeline_options.dataset_all_requests,
-            schema=constants.BIGQUERY["schemas"]["all_requests"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_requests"],
-            **all_pipeline_options.get_all_options())
+        mapped_requests = mapped_requests | "LogRequestsSize" >> beam.Map(
+            partial(log_size, "request", max_content_size)
         )
+
+    _ = mapped_requests | "WriteRequests" >> transformation.WriteBigQuery(
+        table=all_pipeline_options.dataset_all_requests,
+        schema=constants.BIGQUERY["schemas"]["all_requests"],
+        additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+            "all_requests"
+        ],
+        **all_pipeline_options.get_all_options(),
+    )
 
     return pipeline
