@@ -15,14 +15,8 @@ from modules import constants, utils
 
 def add_common_pipeline_options(parser):
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        '--input',
-        help='Input Cloud Storage directory to process.'
-    )
-    group.add_argument(
-        '--input_file',
-        help="Input file containing a list of HAR files"
-    )
+    group.add_argument("--input", help="Input Cloud Storage directory to process.")
+    group.add_argument("--input_file", help="Input file containing a list of HAR files")
     group.add_argument(
         "--subscription",
         help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
@@ -89,7 +83,16 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None, method=None, additional_bq_parameters=None, triggering_frequency=None, **kwargs):
+    def __init__(
+        self,
+        table,
+        schema,
+        streaming=None,
+        method=None,
+        additional_bq_parameters=None,
+        triggering_frequency=None,
+        **kwargs,
+    ):
         super().__init__()
         if additional_bq_parameters is None:
             additional_bq_parameters = {}
@@ -101,7 +104,11 @@ class WriteBigQuery(beam.PTransform):
         self.triggering_frequency = triggering_frequency
 
         # set a 15-minute default for triggering_frequency for streaming pipelines with BigQuery file loads
-        if self.streaming and self.method == WriteToBigQuery.Method.FILE_LOADS and self.triggering_frequency is None:
+        if (
+            self.streaming
+            and self.method == WriteToBigQuery.Method.FILE_LOADS
+            and self.triggering_frequency is None
+        ):
             self.triggering_frequency = 15 * 60
 
     def resolve_params(self):
@@ -134,7 +141,7 @@ class WriteBigQuery(beam.PTransform):
                     "ignoreUnknownValues": True,
                     **self.additional_bq_parameters,
                 },
-                "triggering_frequency": self.triggering_frequency
+                "triggering_frequency": self.triggering_frequency,
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")
@@ -255,7 +262,12 @@ class HarJsonToSummary:
 
         for entry in entries:
             try:
-                request, first_url, first_html_url, entry_number = HarJsonToSummary.summarize_entry(
+                (
+                    request,
+                    first_url,
+                    first_html_url,
+                    entry_number,
+                ) = HarJsonToSummary.summarize_entry(
                     entry, first_url, first_html_url, entry_number, status_info
                 )
                 requests.append(request)
@@ -290,7 +302,9 @@ class HarJsonToSummary:
         try:
             request = entry["request"]
         except KeyError as e:
-            raise RuntimeError(f"Entry does not contain a request, status_info={status_info}, entry={entry}") from e
+            raise RuntimeError(
+                f"Entry does not contain a request, status_info={status_info}, entry={entry}"
+            ) from e
 
         url = request["url"]
         (
@@ -405,9 +419,7 @@ class HarJsonToSummary:
             # Otherwise, fall back to $startedDateTime which is based on the client so might suffer from clock skew.
             try:
                 start_date = (
-                    date_parser.parse(
-                        response_headers.get("resp_date")[0]
-                    ).timestamp()
+                    date_parser.parse(response_headers.get("resp_date")[0]).timestamp()
                     if "resp_date" in response_headers
                     else ret_request["startedDateTime"]
                 )

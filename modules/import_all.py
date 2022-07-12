@@ -237,7 +237,7 @@ def get_technologies(page):
             if app is None:
                 app = app_id
             else:
-                info = app_id[len(app) :].strip()
+                info = app_id[len(app):].strip()
 
             technologies[app] = technologies.get(
                 app, {"technology": app, "info": [], "categories": []}
