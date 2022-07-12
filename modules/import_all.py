@@ -549,22 +549,26 @@ def create_pipeline(argv=None):
         | 'MapJSON' >> beam.MapTuple(from_json)
     )
 
-    # TODO consider re-adding partitions
+    mapped_pages = hars | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
+
+    if logging.getLogger().isEnabledFor(logging.DEBUG):
+        mapped_pages = mapped_pages | "LogPagesSize" >> beam.Map(partial(log_size, "page", max_content_size))
+
     _ = (
-        hars
-        | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
-        | "LogPagesSize" >> beam.Map(partial(log_size, "page", max_content_size))
-        | "WritePages" >> transformation.WriteBigQuery(
+        mapped_pages | "WritePages" >> transformation.WriteBigQuery(
             table=all_pipeline_options.dataset_all_pages,
             schema=constants.BIGQUERY["schemas"]["all_pages"],
             additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_pages"],
             **all_pipeline_options.get_all_options())
         )
 
+    mapped_requests = hars | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
+
+    if logging.getLogger().isEnabledFor(logging.DEBUG):
+        mapped_requests = mapped_requests| "LogRequestsSize" >> beam.Map(partial(log_size, "request", max_content_size))
+
     _ = (
-        hars
-        | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
-        | "LogRequestsSize" >> beam.Map(partial(log_size, "request", max_content_size))
+        mapped_requests
         | "WriteRequests" >> transformation.WriteBigQuery(
             table=all_pipeline_options.dataset_all_requests,
             schema=constants.BIGQUERY["schemas"]["all_requests"],
