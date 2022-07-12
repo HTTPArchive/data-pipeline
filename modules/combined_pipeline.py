@@ -92,6 +92,11 @@ class CombinedPipelineOptions(PipelineOptions):
             default=constants.BIGQUERY["datasets"]["response_bodies_home"],
         )
         parser.add_argument(
+            "--dataset_parsed_css_home_only",
+            help="BigQuery dataset to write parsed_css table (home-page-only)",
+            default=constants.BIGQUERY["datasets"]["parsed_css_home"],
+        )
+        parser.add_argument(
             "--dataset_pages",
             help="BigQuery dataset to write pages table",
             default=constants.BIGQUERY["datasets"]["pages_all"],
@@ -115,6 +120,11 @@ class CombinedPipelineOptions(PipelineOptions):
             "--dataset_response_bodies",
             help="BigQuery dataset to write response_bodies table",
             default=constants.BIGQUERY["datasets"]["response_bodies_all"],
+        )
+        parser.add_argument(
+            "--dataset_parsed_css",
+            help="BigQuery dataset to write parsed_css table",
+            default=constants.BIGQUERY["datasets"]["parsed_css_all"],
         )
 
         parser.add_argument(
