@@ -119,6 +119,23 @@ This pipeline can read inputs from two sources
 - Dataflow temporary and staging artifacts in GCS
 - BigQuery (final landing zone)
 
+## Temp table cleanup
+
+When running a pipeline using the `FILE_LOADS` BigQuery insert method, failures will leave behind temporary tables.
+Use the saved query below and replace the dataset name as desired.
+
+https://console.cloud.google.com/bigquery?sq=226352634162:82dad1cd1374428e8d6eaa961d286559
+
+```sql
+FOR field IN
+    (SELECT table_schema, table_name
+    FROM lighthouse.INFORMATION_SCHEMA.TABLES
+    WHERE table_name like 'beam_bq_job_LOAD_%')
+DO
+    EXECUTE IMMEDIATE format("drop table %s.%s;", field.table_schema, field.table_name);
+END FOR;
+```
+
 ## Known issues
 
 ### Dataflow
