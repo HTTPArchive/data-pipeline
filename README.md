@@ -1,3 +1,27 @@
+- [data-pipeline](#data-pipeline)
+  * [Initial setup](#initial-setup)
+  * [Checking Pub/Sub notifications](#checking-pub-sub-notifications)
+  * [Manually backfill from GCS to Pub/Sub](#manually-backfill-from-gcs-to-pub-sub)
+  * [Run the pipeline](#run-the-pipeline)
+    + [Run from Pub/Sub (streaming)](#run-from-pub-sub--streaming-)
+    + [Read from GCS (batch)](#read-from-gcs--batch-)
+    + [Pipeline types](#pipeline-types)
+  * [Update the pipeline](#update-the-pipeline)
+    + [Update streaming](#update-streaming)
+  * [Inputs](#inputs)
+  * [Outputs](#outputs)
+  * [Known issues](#known-issues)
+    + [Dataflow](#dataflow)
+      - [Logging](#logging)
+      - [Batch loads vs streaming inserts](#batch-loads-vs-streaming-inserts)
+      - [RuntimeError: VarLong too long](#runtimeerror-varlong-too-long)
+      - [Error 413 (Request Entity Too Large)!!1](#error-413-request-entity-too-large1)
+    + [Response cache-control max-age](#response-cache-control-max-age)
+    + [New file formats](#new-file-formats)
+    + [mimetypes and file extensions](#mimetypes-and-file-extensions)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
 
 # data-pipeline
 The new HTTP Archive data pipeline built entirely on GCP
@@ -117,6 +141,30 @@ Various incompatibilities due to missing features
 This is a known issue when using the DirectRunner on Windows 10 with the Beam Python SDK
 
 https://issues.apache.org/jira/browse/BEAM-11037
+
+#### Error 413 (Request Entity Too Large)!!1
+
+This error is returned by the BigQuery API. Initially encountered when running jobs using `STREAMING_INSERTS`.
+While the row size can be controlled in HTTPArchive code, the HTTP request size is controlled in the Beam SDK instead.
+When this error occurs, a single row may not actually exceed the quota, but the Beam SDK will batch several
+(e.g. 500 rows) together which exceeds the BigQuery HTTP API limit.
+
+One solution is to switch from `STREAMING_INSERTS` to `FILE_LOADS` instead.
+
+At the time of writing, the BigQuery quotas for streaming inserts are:
+
+| Limit                    | Default | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
+|--------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Maximum row size         | 10 MB   | Exceeding this value causes invalid errors.                                                                                                                                                                                                                                                                                                                                            |
+| HTTP request size limit	 | 10 MB	  | Exceeding this value causes invalid errors.<br/><br/>Internally the request is translated from HTTP JSON into an internal data structure. The translated data structure has its own enforced size limit. It's hard to predict the size of the resulting internal data structure, but if you keep your HTTP requests to 10 MB or less, the chance of hitting the internal limit is low. |
+
+
+While the BigQuery quotas for load jobs are:
+
+| Limit                     | Default | Notes                                                                                            |
+|---------------------------|---------|--------------------------------------------------------------------------------------------------|
+| JSON: Maximum row size    | 100 MB  | JSON rows can be up to 100 MB in size.                                                           |
+| Maximum size per load job | 15 TB	  | The total size for all of your CSV, JSON, Avro, Parquet, and ORC input files can be up to 15 TB. |
 
 ### Response cache-control max-age
 
