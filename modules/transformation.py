@@ -21,6 +21,11 @@ def add_common_pipeline_options(parser):
         "--subscription",
         help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
     )
+    parser.add_argument(
+        "--subscription_manifest",
+        help="Pub/Sub subscription for manifests. "
+        "Example: `projects/httparchive/subscriptions/har-manifest-gcs-pipeline`",
+    )
 
 
 def add_deadletter_logging(deadletter_queues):
@@ -32,23 +37,34 @@ def add_deadletter_logging(deadletter_queues):
 
 
 class ReadHarFiles(beam.PTransform):
-    def __init__(self, subscription=None, input=None, input_file=None, **kwargs):
+    def __init__(self, subscription=None, subscription_manifest=None, input=None, input_file=None, **kwargs):
         super().__init__()
         self.subscription = subscription
+        self.subscription_manifest = subscription_manifest
         self.input = input
         self.input_file = input_file
 
     def expand(self, p):
         # PubSub pipeline
         if self.subscription:
-            files = (
+            main_files = (
                 p
-                | ReadFromPubSub(subscription=self.subscription)
+                | "ReadMainSub" >> ReadFromPubSub(subscription=self.subscription)
                 | "Decode" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
                 | "FilterHarGz" >> beam.Filter(lambda e: e["name"].endswith(".har.gz"))
                 | "GetFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
-                | beam.io.ReadAllFromText(with_filename=True)
             )
+
+            additional_files = (
+                p
+                | "ReadManifestSub" >> ReadFromPubSub(subscription=self.subscription_manifest)
+                | "DecodeManifest" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
+                | "GetManifestFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
+                | "ReadManifestFile" >> beam.io.ReadAllFromText()
+                | beam.Reshuffle()
+            )
+
+            files = (main_files, additional_files) | beam.Flatten() | beam.io.ReadAllFromText(with_filename=True)
         # GCS pipeline
         else:
             if self.input:

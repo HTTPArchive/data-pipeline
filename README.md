@@ -1,15 +1,18 @@
 - [data-pipeline](#data-pipeline)
   * [Initial setup](#initial-setup)
-  * [Checking Pub/Sub notifications](#checking-pub-sub-notifications)
-  * [Manually backfill from GCS to Pub/Sub](#manually-backfill-from-gcs-to-pub-sub)
+  * [Checking Pub/Sub notifications](#checking-pubsub-notifications)
+  * [Manually backfill from GCS to Pub/Sub using a manifest file](#manually-backfill-from-gcs-to-pubsub-using-a-manifest-file)
+    + [From the CLI](#from-the-cli)
+    + [From the Cloud Console](#from-the-cloud-console)
   * [Run the pipeline](#run-the-pipeline)
-    + [Run from Pub/Sub (streaming)](#run-from-pub-sub--streaming-)
-    + [Read from GCS (batch)](#read-from-gcs--batch-)
+    + [Run from Pub/Sub (streaming)](#run-from-pubsub-streaming)
+    + [Read from GCS (batch)](#read-from-gcs-batch)
     + [Pipeline types](#pipeline-types)
   * [Update the pipeline](#update-the-pipeline)
     + [Update streaming](#update-streaming)
   * [Inputs](#inputs)
   * [Outputs](#outputs)
+  * [Temp table cleanup](#temp-table-cleanup)
   * [Known issues](#known-issues)
     + [Dataflow](#dataflow)
       - [Logging](#logging)
@@ -39,14 +42,14 @@ gcloud auth login
 gcloud config set project httparchive
 
 PROJECT=$(gcloud config get-value project)
-TOPIC=har-gcs
-SUBSCRIPTION=har-gcs-pipeline
-INPUT_PATH=crawls
 BUCKET=gs://httparchive
 
 
 # Create a Pub/Sub topic, subscription, and GCS notifications
-# topic is used to monitor file creation events in Google Cloud Storge
+# topic is used to monitor **file creation** events in Google Cloud Storge for HAR files
+TOPIC=har-gcs
+SUBSCRIPTION=har-gcs-pipeline
+INPUT_PATH=crawls
 
 gcloud pubsub topics create $TOPIC
 gcloud pubsub subscriptions create $SUBSCRIPTION --topic=$TOPIC --expiration-period=never
@@ -56,6 +59,14 @@ gsutil notification create \
     -t projects/$PROJECT/topics/$TOPIC \
     -p $INPUT_PATH \
     $BUCKET
+
+# topic is used to monitor **manual** events in Google Cloud Storge for HAR manifests
+TOPIC=har-manifest-gcs
+SUBSCRIPTION=har-manifest-gcs-pipeline
+INPUT_PATH=crawls_manifest
+
+gcloud pubsub topics create $TOPIC
+gcloud pubsub subscriptions create $SUBSCRIPTION --topic=$TOPIC --expiration-period=never
 ```
 
 ## Checking Pub/Sub notifications
@@ -63,14 +74,26 @@ gsutil notification create \
 gcloud pubsub subscriptions pull projects/$PROJECT/subscriptions/$SUBSCRIPTION
 ```
 
-## Manually backfill from GCS to Pub/Sub
-TODO: not viable, too slow
+## Manually backfill from GCS to Pub/Sub using a manifest file
+
+Publish a message containing the GCS a file bucket and path name to the manifest Pub/Sub topic (i.e. not the main topic).
+
+Example message body
+```json
+{"bucket":"httparchive","name":"crawls_manifest/android-Jul_1_2022.txt"}
+```
+
+### From the CLI
 
 ```shell
-gsutil ls gs://httparchive/crawls/** | \
-sed -r 's/gs:\/\/([^\/]*)\/(.*)/bucketId=\1,objectId=\2/g' | \
-while IFS= read -r f; do gcloud pubsub topics publish projects/httparchive/topics/har-gcs --attribute=$f; done
+gcloud pubsub topics publish projects/httparchive/topics/har-manifest-gcs --message='{"bucket":"httparchive","name":"crawls_manifest/android-Jul_1_2022.txt"}'
 ```
+
+### From the Cloud Console
+
+1. Navigate to the manifest topic (e.g. `projects/httparchive/topics/har-manifest-gcs`)
+2. From the **Messages** tab, select **Publish Message**
+3. Enter a value into the the **Message body** and select **Submit**
 
 ## Run the pipeline
 ### Run from Pub/Sub (streaming)
@@ -109,7 +132,8 @@ Supply the run script with a currently running job name
 
 ## Inputs
 
-This pipeline can read inputs from two sources
+This pipeline can read individual HAR files, or a single file containing a list of HAR file paths
+from two sources:
 - GCS notifications to Pub/Sub
 - GCS file path (globbing is accepted)
 
