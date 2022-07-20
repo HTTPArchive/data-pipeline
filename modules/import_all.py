@@ -21,11 +21,6 @@ from modules.transformation import (
     HarJsonToSummary,
 )
 
-# BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.FILE_LOADS`
-MAX_CONTENT_SIZE_100_MB = 10 * 1024 * 1024
-# BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.STREAMING_INSERTS`
-MAX_CONTENT_SIZE_10_MB = 1024 * 1024
-
 
 def get_page(max_content_size, file_name, har):
     """Parses the page from a HAR object."""
@@ -62,15 +57,7 @@ def get_page(max_content_size, file_name, har):
         )
         return None
 
-    payload_size = len(payload_json)
-    if payload_size > max_content_size:
-        logging.warning(
-            'Skipping pages payload for "%s": '
-            "payload size (%s) exceeds the maximum content size of %s bytes.",
-            wptid,
-            payload_size,
-            max_content_size,
-        )
+    if json_exceeds_max_content_size(payload_json, max_content_size, "pages", wptid):
         return None
 
     custom_metrics = get_custom_metrics(page, wptid)
@@ -274,15 +261,7 @@ def get_lighthouse_reports(har, wptid, max_content_size):
         )
         return None
 
-    report_size = len(report_json)
-    if report_size > max_content_size:
-        logging.warning(
-            "Skipping Lighthouse report for %s: "
-            "Report size (%s) exceeded maximum content size of %s bytes.",
-            wptid,
-            report_size,
-            max_content_size,
-        )
+    if json_exceeds_max_content_size(report_json, max_content_size, "Lighthouse report", wptid):
         return None
 
     return report_json
@@ -347,15 +326,7 @@ def get_requests(max_content_size, file_name, har):
             )
             continue
 
-        payload_size = len(payload)
-        if payload_size > max_content_size:
-            logging.warning(
-                'Skipping requests payload for "%s": '
-                "payload size (%s) exceeded maximum content size of %s bytes.",
-                request_url,
-                payload_size,
-                max_content_size,
-            )
+        if json_exceeds_max_content_size(payload, max_content_size, "requests", wptid):
             continue
 
         response_body = None
@@ -486,13 +457,15 @@ def from_json(file_name, string):
         return None, None
 
 
-def log_size(typ, max_content_size, data):
-    size = len(json.dumps(data).encode("utf-8"))
-    if size >= max_content_size:
+def json_exceeds_max_content_size(data, max_content_size, typ, wptid):
+    size = len(data.encode("utf-8"))
+    oversized = size > max_content_size
+    if oversized:
         logging.warning(
-            f"Size greater than {max_content_size} bytes on {typ} for {data['wptid']}: {size}"
+            f'Skipping {typ} payload for "{wptid}": '
+            f"payload size ({size}) exceeds the maximum content size of {max_content_size} bytes."
         )
-    return data
+    return oversized
 
 
 class AllPipelineOptions(PipelineOptions):
@@ -537,10 +510,7 @@ def create_pipeline(argv=None):
         f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()}"
     )
 
-    if all_pipeline_options.method == WriteToBigQuery.Method.STREAMING_INSERTS:
-        max_content_size = MAX_CONTENT_SIZE_10_MB
-    else:
-        max_content_size = MAX_CONTENT_SIZE_100_MB
+    max_content_size = constants.MaxContentSize[all_pipeline_options.method].value
 
     pipeline = beam.Pipeline(options=pipeline_options)
 
@@ -550,40 +520,26 @@ def create_pipeline(argv=None):
         | "MapJSON" >> beam.MapTuple(from_json)
     )
 
-    mapped_pages = hars | "MapPages" >> beam.FlatMapTuple(
-        partial(get_page, max_content_size)
-    )
-
-    if logging.getLogger().isEnabledFor(logging.DEBUG):
-        mapped_pages = mapped_pages | "LogPagesSize" >> beam.Map(
-            partial(log_size, "page", max_content_size)
+    _ = (
+        hars
+        | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
+        | "WritePages" >> transformation.WriteBigQuery(
+            table=all_pipeline_options.dataset_all_pages,
+            schema=constants.BIGQUERY["schemas"]["all_pages"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_pages"],
+            **all_pipeline_options.get_all_options(),
         )
-
-    _ = mapped_pages | "WritePages" >> transformation.WriteBigQuery(
-        table=all_pipeline_options.dataset_all_pages,
-        schema=constants.BIGQUERY["schemas"]["all_pages"],
-        additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
-            "all_pages"
-        ],
-        **all_pipeline_options.get_all_options(),
     )
 
-    mapped_requests = hars | "MapRequests" >> beam.FlatMapTuple(
-        partial(get_requests, max_content_size)
-    )
-
-    if logging.getLogger().isEnabledFor(logging.DEBUG):
-        mapped_requests = mapped_requests | "LogRequestsSize" >> beam.Map(
-            partial(log_size, "request", max_content_size)
+    _ = (
+        hars
+        | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
+        | "WriteRequests" >> transformation.WriteBigQuery(
+            table=all_pipeline_options.dataset_all_requests,
+            schema=constants.BIGQUERY["schemas"]["all_requests"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["all_requests"],
+            **all_pipeline_options.get_all_options(),
         )
-
-    _ = mapped_requests | "WriteRequests" >> transformation.WriteBigQuery(
-        table=all_pipeline_options.dataset_all_requests,
-        schema=constants.BIGQUERY["schemas"]["all_requests"],
-        additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
-            "all_requests"
-        ],
-        **all_pipeline_options.get_all_options(),
     )
 
     return pipeline

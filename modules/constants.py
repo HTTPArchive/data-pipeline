@@ -1,5 +1,6 @@
 import importlib.resources as pkg_resources
 import json
+from enum import Enum
 
 
 def _get_schema(path):
@@ -88,3 +89,10 @@ GH_RESP_HEADERS = {
     "via": "resp_via",
     "x-powered-by": "resp_x_powered_by",
 }
+
+
+class MaxContentSize(Enum):
+    # BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.FILE_LOADS`
+    FILE_LOADS = 100 * 1000000
+    # BigQuery can handle rows up to 10 MB when using `WriteToBigQuery.Method.STREAMING_INSERTS`
+    STREAMING_INSERTS = 10 * 1000000
