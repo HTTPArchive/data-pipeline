@@ -197,7 +197,7 @@ At the time of writing, the BigQuery quotas for streaming inserts are:
 | Limit                    | Default | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
 |--------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Maximum row size         | 10 MB   | Exceeding this value causes invalid errors.                                                                                                                                                                                                                                                                                                                                            |
-| HTTP request size limit	 | 10 MB	  | Exceeding this value causes invalid errors.<br/><br/>Internally the request is translated from HTTP JSON into an internal data structure. The translated data structure has its own enforced size limit. It's hard to predict the size of the resulting internal data structure, but if you keep your HTTP requests to 10 MB or less, the chance of hitting the internal limit is low. |
+| HTTP request size limit  | 10 MB	  | Exceeding this value causes invalid errors.<br/><br/>Internally the request is translated from HTTP JSON into an internal data structure. The translated data structure has its own enforced size limit. It's hard to predict the size of the resulting internal data structure, but if you keep your HTTP requests to 10 MB or less, the chance of hitting the internal limit is low. |
 
 
 While the BigQuery quotas for load jobs are:
@@ -205,7 +205,7 @@ While the BigQuery quotas for load jobs are:
 | Limit                     | Default | Notes                                                                                            |
 |---------------------------|---------|--------------------------------------------------------------------------------------------------|
 | JSON: Maximum row size    | 100 MB  | JSON rows can be up to 100 MB in size.                                                           |
-| Maximum size per load job | 15 TB	  | The total size for all of your CSV, JSON, Avro, Parquet, and ORC input files can be up to 15 TB. |
+| Maximum size per load job | 15 TB   | The total size for all of your CSV, JSON, Avro, Parquet, and ORC input files can be up to 15 TB. |
 
 ### Response cache-control max-age
 
