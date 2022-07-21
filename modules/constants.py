@@ -1,5 +1,6 @@
 import importlib.resources as pkg_resources
 import json
+from enum import Enum
 
 
 def _get_schema(path):
@@ -24,6 +25,8 @@ BIGQUERY = {
         "lighthouse_home": "httparchive:lighthouse",
         "requests_home": "httparchive:requests",
         "response_bodies_home": "httparchive:response_bodies",
+        "all_pages": "httparchive:all.pages",
+        "all_requests": "httparchive:all.requests",
         "parsed_css_home": "httparchive:experimental_parsed_css",
     },
     "schemas": {
@@ -37,6 +40,16 @@ BIGQUERY = {
         "parsed_css": {"fields": _get_schema("parsed_css.json")},
         "all_pages": {"fields": _get_schema("all_pages.json")},
         "all_requests": {"fields": _get_schema("all_requests.json")},
+    },
+    "additional_bq_parameters": {
+        "all_pages": {
+            'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
+            'clustering': {'fields': ['client', 'is_root_page', 'rank']}
+        },
+        "all_requests": {
+            'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
+            'clustering': {'fields': ['client', 'is_root_page', 'is_main_document', 'type']}
+        },
     },
 }
 
@@ -76,3 +89,10 @@ GH_RESP_HEADERS = {
     "via": "resp_via",
     "x-powered-by": "resp_x_powered_by",
 }
+
+
+class MaxContentSize(Enum):
+    # BigQuery can handle rows up to 100 MB when using `WriteToBigQuery.Method.FILE_LOADS`
+    FILE_LOADS = 100 * 1000000
+    # BigQuery can handle rows up to 10 MB when using `WriteToBigQuery.Method.STREAMING_INSERTS`
+    STREAMING_INSERTS = 10 * 1000000
