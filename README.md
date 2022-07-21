@@ -1,33 +1,31 @@
-- [data-pipeline](#data-pipeline)
-  * [Initial setup](#initial-setup)
-  * [Checking Pub/Sub notifications](#checking-pubsub-notifications)
-  * [Manually backfill from GCS to Pub/Sub using a manifest file](#manually-backfill-from-gcs-to-pubsub-using-a-manifest-file)
-    + [From the CLI](#from-the-cli)
-    + [From the Cloud Console](#from-the-cloud-console)
-  * [Run the pipeline](#run-the-pipeline)
-    + [Run from Pub/Sub (streaming)](#run-from-pubsub-streaming)
-    + [Read from GCS (batch)](#read-from-gcs-batch)
-    + [Pipeline types](#pipeline-types)
-  * [Update the pipeline](#update-the-pipeline)
-    + [Update streaming](#update-streaming)
-  * [Inputs](#inputs)
-  * [Outputs](#outputs)
-  * [Temp table cleanup](#temp-table-cleanup)
-  * [Known issues](#known-issues)
-    + [Dataflow](#dataflow)
-      - [Logging](#logging)
-      - [Batch loads vs streaming inserts](#batch-loads-vs-streaming-inserts)
-      - [RuntimeError: VarLong too long](#runtimeerror-varlong-too-long)
-      - [Error 413 (Request Entity Too Large)!!1](#error-413-request-entity-too-large1)
-    + [Response cache-control max-age](#response-cache-control-max-age)
-    + [New file formats](#new-file-formats)
-    + [mimetypes and file extensions](#mimetypes-and-file-extensions)
-
-<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
-
-
 # data-pipeline
 The new HTTP Archive data pipeline built entirely on GCP
+
+- [Initial setup](#initial-setup)
+- [Checking Pub/Sub notifications](#checking-pubsub-notifications)
+- [Manually backfill from GCS to Pub/Sub using a manifest file](#manually-backfill-from-gcs-to-pubsub-using-a-manifest-file)
+  * [From the CLI](#from-the-cli)
+  * [From the Cloud Console](#from-the-cloud-console)
+- [Run the pipeline](#run-the-pipeline)
+  * [Run from Pub/Sub (streaming)](#run-from-pubsub-streaming)
+  * [Read from GCS (batch)](#read-from-gcs-batch)
+  * [Pipeline types](#pipeline-types)
+- [Update the pipeline](#update-the-pipeline)
+  * [Update streaming](#update-streaming)
+- [Inputs](#inputs)
+- [Outputs](#outputs)
+- [Temp table cleanup](#temp-table-cleanup)
+- [Known issues](#known-issues)
+  * [Dataflow](#dataflow)
+    + [Logging](#logging)
+    + [Batch loads vs streaming inserts](#batch-loads-vs-streaming-inserts)
+    + [RuntimeError: VarLong too long](#runtimeerror-varlong-too-long)
+    + [Error 413 (Request Entity Too Large)!!1](#error-413-request-entity-too-large1)
+  * [Response cache-control max-age](#response-cache-control-max-age)
+  * [New file formats](#new-file-formats)
+  * [mimetypes and file extensions](#mimetypes-and-file-extensions)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 ## Initial setup
 TODO: follow known instructions
@@ -197,7 +195,7 @@ At the time of writing, the BigQuery quotas for streaming inserts are:
 | Limit                    | Default | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
 |--------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Maximum row size         | 10 MB   | Exceeding this value causes invalid errors.                                                                                                                                                                                                                                                                                                                                            |
-| HTTP request size limit  | 10 MB	  | Exceeding this value causes invalid errors.<br/><br/>Internally the request is translated from HTTP JSON into an internal data structure. The translated data structure has its own enforced size limit. It's hard to predict the size of the resulting internal data structure, but if you keep your HTTP requests to 10 MB or less, the chance of hitting the internal limit is low. |
+| HTTP request size limit  | 10 MB   | Exceeding this value causes invalid errors.<br/><br/>Internally the request is translated from HTTP JSON into an internal data structure. The translated data structure has its own enforced size limit. It's hard to predict the size of the resulting internal data structure, but if you keep your HTTP requests to 10 MB or less, the chance of hitting the internal limit is low. |
 
 
 While the BigQuery quotas for load jobs are:
