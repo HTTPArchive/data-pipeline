@@ -17,6 +17,9 @@ class TestCombinedPipeline(TestCase):
 
         # streaming/pubsub
         p = create_pipeline(
-            ["--subscription", "projects/httparchive/subscriptions/foo"]
+            [
+                "--subscription", "projects/httparchive/subscriptions/foo",
+                "--subscription_manifest", "projects/httparchive/subscriptions/bar"
+            ]
         )
         beam.Pipeline.from_runner_api(p.to_runner_api(), p.runner, p._options)
