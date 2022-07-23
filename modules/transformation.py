@@ -431,7 +431,7 @@ class HarJsonToSummary:
         sessionstorage_size = (
             page["_sessionstorage_size"]
             if page.get("_sessionstorage_size")
-               and int(page["_sessionstorage_size"]) > 0
+            and int(page["_sessionstorage_size"]) > 0
             else 0
         )
 
