@@ -13,6 +13,21 @@ from dateutil import parser as date_parser
 from modules import constants, utils
 
 
+def add_common_pipeline_options(parser):
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--input", help="Input Cloud Storage directory to process.")
+    group.add_argument("--input_file", help="Input file containing a list of HAR files")
+    group.add_argument(
+        "--subscription",
+        help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
+    )
+    parser.add_argument(
+        "--subscription_manifest",
+        help="Pub/Sub subscription for manifests. "
+        "Example: `projects/httparchive/subscriptions/har-manifest-gcs-pipeline`",
+    )
+
+
 def add_deadletter_logging(deadletter_queues):
     for name, transform in deadletter_queues.items():
         transform_name = f"Print{utils.title_case_beam_transform_name(name)}Errors"
@@ -22,23 +37,34 @@ def add_deadletter_logging(deadletter_queues):
 
 
 class ReadHarFiles(beam.PTransform):
-    def __init__(self, subscription=None, input=None, input_file=None, **kwargs):
+    def __init__(self, subscription=None, subscription_manifest=None, input=None, input_file=None, **kwargs):
         super().__init__()
         self.subscription = subscription
+        self.subscription_manifest = subscription_manifest
         self.input = input
         self.input_file = input_file
 
     def expand(self, p):
         # PubSub pipeline
         if self.subscription:
-            files = (
+            main_files = (
                 p
-                | ReadFromPubSub(subscription=self.subscription)
+                | "ReadMainSub" >> ReadFromPubSub(subscription=self.subscription)
                 | "Decode" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
                 | "FilterHarGz" >> beam.Filter(lambda e: e["name"].endswith(".har.gz"))
                 | "GetFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
-                | beam.io.ReadAllFromText(with_filename=True)
             )
+
+            additional_files = (
+                p
+                | "ReadManifestSub" >> ReadFromPubSub(subscription=self.subscription_manifest)
+                | "DecodeManifest" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
+                | "GetManifestFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
+                | "ReadManifestFile" >> beam.io.ReadAllFromText()
+                | beam.Reshuffle()
+            )
+
+            files = (main_files, additional_files) | beam.Flatten() | beam.io.ReadAllFromText(with_filename=True)
         # GCS pipeline
         else:
             if self.input:
@@ -73,16 +99,32 @@ class ReadHarFiles(beam.PTransform):
 
 
 class WriteBigQuery(beam.PTransform):
-    def __init__(self, table, schema, streaming=None, method=None, triggering_frequency=None):
+    def __init__(
+        self,
+        table,
+        schema,
+        streaming=None,
+        method=None,
+        additional_bq_parameters=None,
+        triggering_frequency=None,
+        **kwargs,
+    ):
         super().__init__()
+        if additional_bq_parameters is None:
+            additional_bq_parameters = {}
         self.table = table
         self.schema = schema
         self.streaming = streaming
         self.method = method
+        self.additional_bq_parameters = additional_bq_parameters
         self.triggering_frequency = triggering_frequency
 
         # set a 15-minute default for triggering_frequency for streaming pipelines with BigQuery file loads
-        if self.streaming and self.method == WriteToBigQuery.Method.FILE_LOADS and self.triggering_frequency is None:
+        if (
+            self.streaming
+            and self.method == WriteToBigQuery.Method.FILE_LOADS
+            and self.triggering_frequency is None
+        ):
             self.triggering_frequency = 15 * 60
 
     def resolve_params(self):
@@ -101,6 +143,9 @@ class WriteBigQuery(beam.PTransform):
                 "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
                 "with_auto_sharding": self.streaming,
                 "ignore_unknown_columns": True,
+                "additional_bq_parameters": {
+                    **self.additional_bq_parameters,
+                },
                 "triggering_frequency": self.triggering_frequency,
             }
         if self.method == WriteToBigQuery.Method.FILE_LOADS:
@@ -108,8 +153,11 @@ class WriteBigQuery(beam.PTransform):
                 "method": WriteToBigQuery.Method.FILE_LOADS,
                 "create_disposition": create_disposition,
                 "write_disposition": BigQueryDisposition.WRITE_APPEND,
-                "additional_bq_parameters": {"ignoreUnknownValues": True},
-                "triggering_frequency": self.triggering_frequency
+                "additional_bq_parameters": {
+                    "ignoreUnknownValues": True,
+                    **self.additional_bq_parameters,
+                },
+                "triggering_frequency": self.triggering_frequency,
             }
         else:
             raise RuntimeError(f"BigQuery write method not supported: {self.method}")
@@ -169,10 +217,16 @@ class HarJsonToSummary:
             logging.warning("HAR file read error.")
             return None, None
 
-        try:
-            har = json.loads(element)
-        except json.JSONDecodeError:
-            logging.warning(f"JSON decode failed for: {file_name}")
+        if isinstance(element, str):
+            try:
+                har = json.loads(element)
+            except json.JSONDecodeError:
+                logging.warning(f"JSON decode failed for: {file_name}")
+                return None, None
+        elif isinstance(element, dict):
+            har = element
+        else:
+            logging.exception(f"Unexpected type for: {file_name}")
             return None, None
 
         log = har["log"]
@@ -223,205 +277,216 @@ class HarJsonToSummary:
         entry_number = 0
 
         for entry in entries:
-            if entry.get("_number"):
-                entry_number = entry["_number"]
-            else:
-                entry_number += 1
-
-            ret_request = {
-                "requestid": (status_info["pageid"] << 32) + entry_number,
-                "client": status_info["client"],
-                "date": status_info["date"],
-                "pageid": status_info["pageid"],
-                "crawlid": status_info["crawlid"],
-                # we use this below for expAge calculation
-                "startedDateTime": utils.datetime_to_epoch(
-                    entry["startedDateTime"], status_info
-                ),
-                "time": entry["time"],
-                "_cdn_provider": entry.get("_cdn_provider"),
-                # amount response WOULD have been reduced if it had been gzipped
-                "_gzip_save": entry.get("_gzip_save"),
-            }
-            # REQUEST
             try:
-                request = entry["request"]
-            except KeyError:
-                # TODO metric for failed parsing
-                logging.warning(
-                    f"Entry does not contain a request, status_info={status_info}, entry={entry}"
+                (
+                    request,
+                    first_url,
+                    first_html_url,
+                    entry_number,
+                ) = HarJsonToSummary.summarize_entry(
+                    entry, first_url, first_html_url, entry_number, status_info
                 )
-                continue
-
-            url = request["url"]
-            (
-                request_headers,
-                request_other_headers,
-                request_cookie_size,
-            ) = utils.parse_header(
-                request["headers"], constants.GH_REQ_HEADERS, cookie_key="cookie"
-            )
-
-            req_headers_size = (
-                request.get("headersSize")
-                if int(request.get("headersSize", 0)) > 0
-                else None
-            )
-            req_body_size = (
-                request.get("bodySize") if int(request.get("bodySize", 0)) > 0 else None
-            )
-
-            ret_request.update(
-                {
-                    "method": request["method"],
-                    "httpVersion": request["httpVersion"],
-                    "url": url,
-                    "urlShort": url[:255],
-                    "reqHeadersSize": req_headers_size,
-                    "reqBodySize": req_body_size,
-                    "reqOtherHeaders": request_other_headers,
-                    "reqCookieLen": request_cookie_size,
-                }
-            )
-
-            # RESPONSE
-            response = entry["response"]
-            status = response["status"]
-
-            resp_headers_size = (
-                response.get("headersSize")
-                if int(response.get("headersSize", 0)) > 0
-                else None
-            )
-            resp_body_size = (
-                response.get("bodySize")
-                if int(response.get("bodySize", 0)) > 0
-                else None
-            )
-
-            ret_request.update(
-                {
-                    "status": status,
-                    "respHttpVersion": response["httpVersion"],
-                    "redirectUrl": response.get("url"),
-                    "respHeadersSize": resp_headers_size,
-                    "respBodySize": resp_body_size,
-                    "respSize": response["content"]["size"],
-                }
-            )
-
-            # TODO revisit this logic - is this the right way to get extention, type, format from mimetype?
-            #  consider using mimetypes library instead https://docs.python.org/3/library/mimetypes.html
-            mime_type = response["content"]["mimeType"]
-            ext = utils.get_ext(url)
-            typ = utils.pretty_type(mime_type, ext)
-            frmt = utils.get_format(typ, mime_type, ext)
-
-            ret_request.update(
-                {
-                    "mimeType": mime_type.lower(),
-                    "ext": ext.lower(),
-                    "type": typ.lower(),
-                    "format": frmt.lower(),
-                }
-            )
-
-            (
-                response_headers,
-                response_other_headers,
-                response_cookie_size,
-            ) = utils.parse_header(
-                response["headers"],
-                constants.GH_RESP_HEADERS,
-                cookie_key="set-cookie",
-                output_headers=request_headers,
-            )
-            ret_request.update(
-                {
-                    "respOtherHeaders": response_other_headers,
-                    "respCookieLen": response_cookie_size,
-                }
-            )
-
-            # calculate expAge - number of seconds before resource expires
-            exp_age = 0
-            cc = (
-                request_headers.get("resp_cache_control")[0]
-                if "resp_cache_control" in request_headers
-                else None
-            )
-            if cc and ("must-revalidate" in cc or "no-cache" in cc or "no-store" in cc):
-                # These directives dictate the response can NOT be cached.
-                exp_age = 0
-            elif cc and re.match(r"max-age=\d+", cc):
-                try:
-                    exp_age = utils.clamp_integer(re.findall(r"\d+", cc)[0])
-                except Exception:
-                    # TODO compare results from old and new pipeline for these errors
-                    logging.warning(f"Unable to parse max-age, cc:{cc}", exc_info=True)
-            elif "resp_expires" in response_headers:
-                # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
-                #     freshness_lifetime = expires_value - date_value
-                # If the Date: response header is present, we use that.
-                # Otherwise, fall back to $startedDateTime which is based on the client so might suffer from clock skew.
-                try:
-                    start_date = (
-                        date_parser.parse(
-                            response_headers.get("resp_date")[0]
-                        ).timestamp()
-                        if "resp_date" in response_headers
-                        else ret_request["startedDateTime"]
-                    )
-                    end_date = date_parser.parse(
-                        response_headers["resp_expires"][0]
-                    ).timestamp()
-                    # TODO try regex to resolve issues parsing apache ExpiresByType Directive
-                    #   https://httpd.apache.org/docs/2.4/mod/mod_expires.html#expiresbytype
-                    # end_date = date_parser.parse(
-                    #   re.findall(r"\d+", response_headers['resp_expires'][0])[0]).timestamp()
-                    exp_age = end_date - start_date
-                except Exception:
-                    logging.warning(
-                        f"Could not parse dates. "
-                        f"start=(resp_date:{response_headers.get('resp_date')},"
-                        f"startedDateTime:{ret_request.get('startedDateTime')}), "
-                        f"end=(resp_expires:{response_headers.get('resp_expires')}), "
-                        f"status_info:{status_info}",
-                        exc_info=True,
-                    )
-
-            ret_request.update({"expAge": int(max(exp_age, 0))})
-
-            # NOW add all the headers from both the request and response.
-            ret_request.update({k: ", ".join(v) for k, v in request_headers.items()})
-
-            # TODO implement custom rules?
-            # https://github.com/HTTPArchive/legacy.httparchive.org/blob/de08e0c7c94a7da529826f0a4429a9d28b8fdf5e/bulktest/batch_lib.inc#L658-L664
-
-            # TODO consider doing this sooner? why process if status is bad?
-            # wrap it up
-            first_req = False
-            first_html = False
-            if not first_url:
-                if (400 <= status <= 599) or 12000 <= status:
-                    logging.warning(
-                        f"The first request ({url}) failed with status {status}. status_info={status_info}"
-                    )
-                    return None, None, None
-                # This is the first URL found associated with the page - assume it's the base URL.
-                first_req = True
-                first_url = url
-
-            if not first_html_url:
-                # This is the first URL found associated with the page that's HTML.
-                first_html = True
-                first_html_url = url
-
-            ret_request.update({"firstReq": first_req, "firstHtml": first_html})
-
-            requests.append(ret_request)
+                requests.append(request)
+            except RuntimeError as e:
+                logging.warning(e, exc_info=True)
 
         return requests, first_url, first_html_url
+
+    @staticmethod
+    def summarize_entry(entry, first_url, first_html_url, entry_number, status_info):
+        if entry.get("_number"):
+            entry_number = entry["_number"]
+        else:
+            entry_number += 1
+
+        ret_request = {
+            "requestid": (status_info["pageid"] << 32) + entry_number,
+            "client": status_info["client"],
+            "date": status_info["date"],
+            "pageid": status_info["pageid"],
+            "crawlid": status_info["crawlid"],
+            # we use this below for expAge calculation
+            "startedDateTime": utils.datetime_to_epoch(
+                entry["startedDateTime"], status_info
+            ),
+            "time": entry["time"],
+            "_cdn_provider": entry.get("_cdn_provider"),
+            # amount response WOULD have been reduced if it had been gzipped
+            "_gzip_save": entry.get("_gzip_save"),
+        }
+        # REQUEST
+        try:
+            request = entry["request"]
+        except KeyError as e:
+            raise RuntimeError(
+                f"Entry does not contain a request, status_info={status_info}, entry={entry}"
+            ) from e
+
+        url = request["url"]
+        (
+            request_headers,
+            request_other_headers,
+            request_cookie_size,
+        ) = utils.parse_header(
+            request["headers"], constants.GH_REQ_HEADERS, cookie_key="cookie"
+        )
+
+        req_headers_size = (
+            request.get("headersSize")
+            if int(request.get("headersSize", 0)) > 0
+            else None
+        )
+        req_body_size = (
+            request.get("bodySize") if int(request.get("bodySize", 0)) > 0 else None
+        )
+
+        ret_request.update(
+            {
+                "method": request["method"],
+                "httpVersion": request["httpVersion"],
+                "url": url,
+                "urlShort": url[:255],
+                "reqHeadersSize": req_headers_size,
+                "reqBodySize": req_body_size,
+                "reqOtherHeaders": request_other_headers,
+                "reqCookieLen": request_cookie_size,
+            }
+        )
+
+        # RESPONSE
+        response = entry["response"]
+        status = response["status"]
+
+        resp_headers_size = (
+            response.get("headersSize")
+            if int(response.get("headersSize", 0)) > 0
+            else None
+        )
+        resp_body_size = (
+            response.get("bodySize")
+            if int(response.get("bodySize", 0)) > 0
+            else None
+        )
+
+        ret_request.update(
+            {
+                "status": status,
+                "respHttpVersion": response["httpVersion"],
+                "redirectUrl": response.get("url"),
+                "respHeadersSize": resp_headers_size,
+                "respBodySize": resp_body_size,
+                "respSize": response["content"]["size"],
+            }
+        )
+
+        # TODO revisit this logic - is this the right way to get extention, type, format from mimetype?
+        #  consider using mimetypes library instead https://docs.python.org/3/library/mimetypes.html
+        mime_type = response["content"]["mimeType"]
+        ext = utils.get_ext(url)
+        typ = utils.pretty_type(mime_type, ext)
+        frmt = utils.get_format(typ, mime_type, ext)
+
+        ret_request.update(
+            {
+                "mimeType": mime_type.lower(),
+                "ext": ext.lower(),
+                "type": typ.lower(),
+                "format": frmt.lower(),
+            }
+        )
+
+        (
+            response_headers,
+            response_other_headers,
+            response_cookie_size,
+        ) = utils.parse_header(
+            response["headers"],
+            constants.GH_RESP_HEADERS,
+            cookie_key="set-cookie",
+            output_headers=request_headers,
+        )
+        ret_request.update(
+            {
+                "respOtherHeaders": response_other_headers,
+                "respCookieLen": response_cookie_size,
+            }
+        )
+
+        # calculate expAge - number of seconds before resource expires
+        exp_age = 0
+        cc = (
+            request_headers.get("resp_cache_control")[0]
+            if "resp_cache_control" in request_headers
+            else None
+        )
+        if cc and ("must-revalidate" in cc or "no-cache" in cc or "no-store" in cc):
+            # These directives dictate the response can NOT be cached.
+            exp_age = 0
+        elif cc and re.match(r"max-age=\d+", cc):
+            try:
+                exp_age = utils.clamp_integer(re.findall(r"\d+", cc)[0])
+            except Exception:
+                # TODO compare results from old and new pipeline for these errors
+                logging.warning(f"Unable to parse max-age, cc:{cc}", exc_info=True)
+        elif "resp_expires" in response_headers:
+            # According to RFC 2616 ( http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.2.4 ):
+            #     freshness_lifetime = expires_value - date_value
+            # If the Date: response header is present, we use that.
+            # Otherwise, fall back to $startedDateTime which is based on the client so might suffer from clock skew.
+            try:
+                start_date = (
+                    date_parser.parse(response_headers.get("resp_date")[0]).timestamp()
+                    if "resp_date" in response_headers
+                    else ret_request["startedDateTime"]
+                )
+                end_date = date_parser.parse(
+                    response_headers["resp_expires"][0]
+                ).timestamp()
+                # TODO try regex to resolve issues parsing apache ExpiresByType Directive
+                #   https://httpd.apache.org/docs/2.4/mod/mod_expires.html#expiresbytype
+                # end_date = date_parser.parse(
+                #   re.findall(r"\d+", response_headers['resp_expires'][0])[0]).timestamp()
+                exp_age = end_date - start_date
+            except Exception:
+                logging.warning(
+                    f"Could not parse dates. "
+                    f"start=(resp_date:{response_headers.get('resp_date')},"
+                    f"startedDateTime:{ret_request.get('startedDateTime')}), "
+                    f"end=(resp_expires:{response_headers.get('resp_expires')}), "
+                    f"status_info:{status_info}",
+                    exc_info=True,
+                )
+
+        ret_request.update({"expAge": int(max(exp_age, 0))})
+
+        # NOW add all the headers from both the request and response.
+        ret_request.update({k: ", ".join(v) for k, v in request_headers.items()})
+
+        # TODO implement custom rules?
+        # https://github.com/HTTPArchive/legacy.httparchive.org/blob/de08e0c7c94a7da529826f0a4429a9d28b8fdf5e/bulktest/batch_lib.inc#L658-L664
+
+        # TODO consider doing this sooner? why process if status is bad?
+        # wrap it up
+        first_req = False
+        first_html = False
+        if not first_url:
+            if (400 <= status <= 599) or 12000 <= status:
+                logging.warning(
+                    f"The first request ({url}) failed with status {status}. status_info={status_info}"
+                )
+                return None, None, None, None
+            # This is the first URL found associated with the page - assume it's the base URL.
+            first_req = True
+            first_url = url
+
+        if not first_html_url:
+            # This is the first URL found associated with the page that's HTML.
+            first_html = True
+            first_html_url = url
+
+        ret_request.update({"firstReq": first_req, "firstHtml": first_html})
+
+        return ret_request, first_url, first_html_url, entry_number
 
     @staticmethod
     def import_page(page, status_info):
