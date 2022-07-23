@@ -11,7 +11,6 @@ from functools import partial
 from hashlib import sha256
 
 import apache_beam as beam
-from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions
 
 from modules import constants, utils, transformation
@@ -486,18 +485,6 @@ class AllPipelineOptions(PipelineOptions):
             default=constants.BIGQUERY["datasets"]["all_requests"],
         )
 
-        bq_write_methods = [
-            WriteToBigQuery.Method.STREAMING_INSERTS,
-            WriteToBigQuery.Method.FILE_LOADS,
-        ]
-        parser.add_argument(
-            "--big_query_write_method",
-            dest="method",
-            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
-            choices=bq_write_methods,
-            default=WriteToBigQuery.Method.FILE_LOADS,
-        )
-
 
 def create_pipeline(argv=None):
     """Constructs and runs the BigQuery import pipeline."""
@@ -510,7 +497,7 @@ def create_pipeline(argv=None):
         f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()}"
     )
 
-    max_content_size = constants.MaxContentSize[all_pipeline_options.method].value
+    max_content_size = constants.MaxContentSize.FILE_LOADS.value
 
     pipeline = beam.Pipeline(options=pipeline_options)
 

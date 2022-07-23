@@ -2,7 +2,6 @@ import argparse
 import logging
 
 import apache_beam as beam
-from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions, StandardOptions
 
 from modules import summary_pipeline, non_summary_pipeline, constants
@@ -22,26 +21,6 @@ class CombinedPipelineOptions(PipelineOptions):
             default="combined",
             choices=pipeline_types,
             help=f"Type of pipeline to run. One of {','.join(pipeline_types)}",
-        )
-
-        bq_write_methods = [
-            WriteToBigQuery.Method.STREAMING_INSERTS,
-            WriteToBigQuery.Method.FILE_LOADS,
-        ]
-        parser.add_argument(
-            "--big_query_write_method_summary",
-            dest="big_query_write_method",
-            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
-            choices=bq_write_methods,
-            default=WriteToBigQuery.Method.FILE_LOADS,
-        )
-        parser.add_argument(
-            "--big_query_triggering_frequency",
-            dest="triggering_frequency",
-            help="When method is FILE_LOADS: Value will be converted to int. Every triggering_frequency seconds, a "
-            "BigQuery load job will be triggered for all the data written since the last load job.\n"
-            "When method is STREAMING_INSERTS and with_auto_sharding=True: A streaming inserts batch will be "
-            "submitted at least every triggering_frequency seconds when data is waiting."
         )
 
         parser.add_argument(
@@ -179,7 +158,5 @@ def create_pipeline(argv=None):
                 **combined_options.get_all_options()
             )
         )
-
-    # TODO detect DONE file, move temp table to final destination, shutdown pipeline (if streaming)
 
     return p
