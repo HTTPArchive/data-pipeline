@@ -9,9 +9,9 @@ import re
 from copy import deepcopy
 from functools import partial
 from hashlib import sha256
+from typing import Union, Dict
 
 import apache_beam as beam
-from apache_beam.io import WriteToBigQuery
 from apache_beam.options.pipeline_options import PipelineOptions
 
 from modules import constants, utils, transformation
@@ -57,9 +57,6 @@ def get_page(max_content_size, file_name, har):
         )
         return None
 
-    if json_exceeds_max_content_size(payload_json, max_content_size, "pages", wptid):
-        return None
-
     custom_metrics = get_custom_metrics(page, wptid)
     lighthouse = get_lighthouse_reports(har, wptid, max_content_size)
     features = get_features(page, wptid)
@@ -80,24 +77,27 @@ def get_page(max_content_size, file_name, har):
             f"{file_name=}, {har=}"
         )
 
-    return [
-        {
-            "date": date,
-            "client": client,
-            "page": url,
-            "is_root_page": is_root_page,
-            "root_page": root_page,
-            "rank": rank,
-            "wptid": wptid,
-            "payload": payload_json,
-            "summary": summary_page,
-            "custom_metrics": custom_metrics,
-            "lighthouse": lighthouse,
-            "features": features,
-            "technologies": technologies,
-            "metadata": to_json(metadata),
-        }
-    ]
+    ret = {
+        "date": date,
+        "client": client,
+        "page": url,
+        "is_root_page": is_root_page,
+        "root_page": root_page,
+        "rank": rank,
+        "wptid": wptid,
+        "payload": payload_json,
+        "summary": summary_page,
+        "custom_metrics": custom_metrics,
+        "lighthouse": lighthouse,
+        "features": features,
+        "technologies": technologies,
+        "metadata": to_json(metadata),
+    }
+
+    if json_exceeds_max_content_size(ret, max_content_size, "pages", wptid):
+        return None
+
+    return [ret]
 
 
 def get_custom_metrics(page, wptid):
@@ -326,15 +326,12 @@ def get_requests(max_content_size, file_name, har):
             )
             continue
 
-        if json_exceeds_max_content_size(payload, max_content_size, "requests", wptid):
-            continue
-
         response_body = None
         if request.get("response") and request.get("response").get("content"):
             response_body = request.get("response").get("content").get("text", None)
 
             if response_body is not None:
-                response_body = response_body[:max_content_size]
+                response_body = response_body[:constants.MaxContentSize.RESPONSE_BODIES.value]
 
         mime_type = request.get("response").get("content").get("mimeType")
         ext = utils.get_ext(request_url)
@@ -358,25 +355,28 @@ def get_requests(max_content_size, file_name, har):
                 f"{file_name=}, {har=}"
             )
 
-        requests.append(
-            {
-                "date": date,
-                "client": client,
-                "page": page_url,
-                "is_root_page": is_root_page,
-                "root_page": root_page,
-                "url": request_url,
-                "is_main_document": is_main_document,
-                "type": type,
-                "index": index,
-                "payload": payload,
-                "summary": summary_request,
-                "request_headers": request_headers,
-                "response_headers": response_headers,
-                "response_body": response_body,
-                "wptid": wptid,
-            }
-        )
+        ret = {
+            "date": date,
+            "client": client,
+            "page": page_url,
+            "is_root_page": is_root_page,
+            "root_page": root_page,
+            "url": request_url,
+            "is_main_document": is_main_document,
+            "type": type,
+            "index": index,
+            "payload": payload,
+            "summary": summary_request,
+            "request_headers": request_headers,
+            "response_headers": response_headers,
+            "response_body": response_body,
+            "wptid": wptid,
+        }
+
+        if json_exceeds_max_content_size(ret, max_content_size, "requests", wptid):
+            continue
+
+        requests.append(ret)
 
     return requests
 
@@ -457,8 +457,13 @@ def from_json(file_name, string):
         return None, None
 
 
-def json_exceeds_max_content_size(data, max_content_size, typ, wptid):
-    size = len(data.encode("utf-8"))
+def json_exceeds_max_content_size(data: Union[Dict, str], max_content_size, typ, wptid):
+    if isinstance(data, dict):
+        payload = to_json(data)
+    else:
+        payload = data
+
+    size = len(payload.encode("utf-8"))
     oversized = size > max_content_size
     if oversized:
         logging.warning(
@@ -486,18 +491,6 @@ class AllPipelineOptions(PipelineOptions):
             default=constants.BIGQUERY["datasets"]["all_requests"],
         )
 
-        bq_write_methods = [
-            WriteToBigQuery.Method.STREAMING_INSERTS,
-            WriteToBigQuery.Method.FILE_LOADS,
-        ]
-        parser.add_argument(
-            "--big_query_write_method",
-            dest="method",
-            help=f"BigQuery write method. One of {','.join(bq_write_methods)}",
-            choices=bq_write_methods,
-            default=WriteToBigQuery.Method.FILE_LOADS,
-        )
-
 
 def create_pipeline(argv=None):
     """Constructs and runs the BigQuery import pipeline."""
@@ -510,7 +503,7 @@ def create_pipeline(argv=None):
         f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()}"
     )
 
-    max_content_size = constants.MaxContentSize[all_pipeline_options.method].value
+    max_content_size = constants.MaxContentSize.FILE_LOADS.value
 
     pipeline = beam.Pipeline(options=pipeline_options)
 

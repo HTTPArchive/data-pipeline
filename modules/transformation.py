@@ -5,9 +5,7 @@ import os
 import re
 
 import apache_beam as beam
-from apache_beam.io import ReadFromPubSub, WriteToBigQuery, BigQueryDisposition
-from apache_beam.io.gcp.bigquery import BigQueryWriteFn
-from apache_beam.io.gcp.bigquery_tools import RetryStrategy
+from apache_beam.io import WriteToBigQuery, BigQueryDisposition
 from dateutil import parser as date_parser
 
 from modules import constants, utils
@@ -17,83 +15,40 @@ def add_common_pipeline_options(parser):
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--input", help="Input Cloud Storage directory to process.")
     group.add_argument("--input_file", help="Input file containing a list of HAR files")
-    group.add_argument(
-        "--subscription",
-        help="Pub/Sub subscription. Example: `projects/httparchive/subscriptions/har-gcs-pipeline`",
-    )
-    parser.add_argument(
-        "--subscription_manifest",
-        help="Pub/Sub subscription for manifests. "
-        "Example: `projects/httparchive/subscriptions/har-manifest-gcs-pipeline`",
-    )
-
-
-def add_deadletter_logging(deadletter_queues):
-    for name, transform in deadletter_queues.items():
-        transform_name = f"Print{utils.title_case_beam_transform_name(name)}Errors"
-        transform[BigQueryWriteFn.FAILED_ROWS] | transform_name >> beam.FlatMap(
-            lambda e: logging.error(f"Could not load {name} to BigQuery: {e}")
-        )
 
 
 class ReadHarFiles(beam.PTransform):
-    def __init__(self, subscription=None, subscription_manifest=None, input=None, input_file=None, **kwargs):
+    def __init__(self, input=None, input_file=None, **kwargs):
         super().__init__()
-        self.subscription = subscription
-        self.subscription_manifest = subscription_manifest
         self.input = input
         self.input_file = input_file
 
     def expand(self, p):
-        # PubSub pipeline
-        if self.subscription:
-            main_files = (
-                p
-                | "ReadMainSub" >> ReadFromPubSub(subscription=self.subscription)
-                | "Decode" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
-                | "FilterHarGz" >> beam.Filter(lambda e: e["name"].endswith(".har.gz"))
-                | "GetFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
+        if self.input:
+            matching = (
+                self.input
+                if self.input.endswith(".har.gz")
+                else f"{self.input}/*.har.gz"
             )
 
-            additional_files = (
-                p
-                | "ReadManifestSub" >> ReadFromPubSub(subscription=self.subscription_manifest)
-                | "DecodeManifest" >> beam.Map(lambda b: json.loads(b.decode("utf-8")))
-                | "GetManifestFileName" >> beam.Map(lambda e: f"gs://{e['bucket']}/{e['name']}")
-                | "ReadManifestFile" >> beam.io.ReadAllFromText()
-                | beam.Reshuffle()
-            )
-
-            files = (main_files, additional_files) | beam.Flatten() | beam.io.ReadAllFromText(with_filename=True)
-        # GCS pipeline
+            # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
+            #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
+            #   https://issues.apache.org/jira/browse/BEAM-9620
+            #   not an issue for the java SDK
+            #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
+            reader = p | beam.Create([matching])
         else:
-            if self.input:
-                matching = (
-                    self.input
-                    if self.input.endswith(".har.gz")
-                    else f"{self.input}/*.har.gz"
-                    # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
-                )
-
-                # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
-                #   https://stackoverflow.com/questions/60874942/avoid-recomputing-size-of-all-cloud-storage-files-in-beam-python-sdk
-                #   https://issues.apache.org/jira/browse/BEAM-9620
-                #   not an issue for the java SDK
-                #     https://beam.apache.org/releases/javadoc/2.37.0/org/apache/beam/sdk/io/contextualtextio/ContextualTextIO.Read.html#withHintMatchesManyFiles--
-                # TODO replace with match continuously for streaming?
-                reader = p | beam.Create([matching])
-            else:
-                reader = (
-                    p
-                    | beam.Create([self.input_file])
-                    | "ReadInputFile" >> beam.io.ReadAllFromText()
-                )
-
-            files = (
-                reader
-                | beam.Reshuffle()
-                | beam.io.ReadAllFromText(with_filename=True)
+            reader = (
+                p
+                | beam.Create([self.input_file])
+                | "ReadInputFile" >> beam.io.ReadAllFromText()
             )
+
+        files = (
+            reader
+            | beam.Reshuffle()
+            | beam.io.ReadAllFromText(with_filename=True)
+        )
 
         return files
 
@@ -103,10 +58,7 @@ class WriteBigQuery(beam.PTransform):
         self,
         table,
         schema,
-        streaming=None,
-        method=None,
         additional_bq_parameters=None,
-        triggering_frequency=None,
         **kwargs,
     ):
         super().__init__()
@@ -114,53 +66,18 @@ class WriteBigQuery(beam.PTransform):
             additional_bq_parameters = {}
         self.table = table
         self.schema = schema
-        self.streaming = streaming
-        self.method = method
         self.additional_bq_parameters = additional_bq_parameters
-        self.triggering_frequency = triggering_frequency
-
-        # set a 15-minute default for triggering_frequency for streaming pipelines with BigQuery file loads
-        if (
-            self.streaming
-            and self.method == WriteToBigQuery.Method.FILE_LOADS
-            and self.triggering_frequency is None
-        ):
-            self.triggering_frequency = 15 * 60
 
     def resolve_params(self):
-        # workaround/temporary - never create tables when streaming
-        # to avoid thundering herd issues where multiple workers attempt to create tables concurrently
-        if self.streaming:
-            create_disposition = BigQueryDisposition.CREATE_NEVER
-        else:
-            create_disposition = BigQueryDisposition.CREATE_IF_NEEDED
-
-        if self.method == WriteToBigQuery.Method.STREAMING_INSERTS:
-            return {
-                "method": WriteToBigQuery.Method.STREAMING_INSERTS,
-                "create_disposition": create_disposition,
-                "write_disposition": BigQueryDisposition.WRITE_APPEND,
-                "insert_retry_strategy": RetryStrategy.RETRY_ON_TRANSIENT_ERROR,
-                "with_auto_sharding": self.streaming,
-                "ignore_unknown_columns": True,
-                "additional_bq_parameters": {
-                    **self.additional_bq_parameters,
-                },
-                "triggering_frequency": self.triggering_frequency,
-            }
-        if self.method == WriteToBigQuery.Method.FILE_LOADS:
-            return {
-                "method": WriteToBigQuery.Method.FILE_LOADS,
-                "create_disposition": create_disposition,
-                "write_disposition": BigQueryDisposition.WRITE_APPEND,
-                "additional_bq_parameters": {
-                    "ignoreUnknownValues": True,
-                    **self.additional_bq_parameters,
-                },
-                "triggering_frequency": self.triggering_frequency,
-            }
-        else:
-            raise RuntimeError(f"BigQuery write method not supported: {self.method}")
+        return {
+            "method": WriteToBigQuery.Method.FILE_LOADS,
+            "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
+            "write_disposition": BigQueryDisposition.WRITE_APPEND,
+            "additional_bq_parameters": {
+                "ignoreUnknownValues": True,
+                **self.additional_bq_parameters,
+            },
+        }
 
     def expand(self, pcoll, **kwargs):
         return pcoll | WriteToBigQuery(

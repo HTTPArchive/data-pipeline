@@ -14,12 +14,3 @@ class TestCombinedPipeline(TestCase):
         # batch/GCS file listing
         p = create_pipeline(["--input_file", "bar"])
         beam.Pipeline.from_runner_api(p.to_runner_api(), p.runner, p._options)
-
-        # streaming/pubsub
-        p = create_pipeline(
-            [
-                "--subscription", "projects/httparchive/subscriptions/foo",
-                "--subscription_manifest", "projects/httparchive/subscriptions/bar"
-            ]
-        )
-        beam.Pipeline.from_runner_api(p.to_runner_api(), p.runner, p._options)
