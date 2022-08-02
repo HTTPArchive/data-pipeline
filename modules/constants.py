@@ -47,12 +47,12 @@ BIGQUERY = {
         "all_pages": {
             'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
             'clustering': {'fields': ['client', 'is_root_page', 'rank']},
-            'maxBadRecords': 100000,
+            'maxBadRecords': 100,
         },
         "all_requests": {
             'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
             'clustering': {'fields': ['client', 'is_root_page', 'is_main_document', 'type']},
-            'maxBadRecords': 100000,
+            'maxBadRecords': 100,
         },
     },
 }
