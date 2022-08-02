@@ -29,7 +29,6 @@ class ReadHarFiles(beam.PTransform):
                 self.input
                 if self.input.endswith(".har.gz")
                 else f"{self.input}/*.har.gz"
-                # [x if x.endswith(".har.gz") else f"{x}/*.har.gz" for x in self.input]
             )
 
             # using ReadAllFromText instead of ReadFromTextWithFilename to avoid listing file sizes locally
