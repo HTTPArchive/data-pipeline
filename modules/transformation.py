@@ -438,6 +438,12 @@ class HarJsonToSummary:
             int(float(page.get("_avg_dom_depth"))) if page.get("_avg_dom_depth") else 0
         )
 
+        doc_type = (
+            json.dumps(page.get("_doctype"))
+            if page.get("_doctype")
+            else None
+        )
+
         return {
             "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
             "client": status_info["client"],
@@ -468,7 +474,7 @@ class HarJsonToSummary:
             "_connections": page.get("_connections"),
             "_adult_site": page.get("_adult_site", False),
             "avg_dom_depth": avg_dom_depth,
-            "doctype": page.get("_doctype"),
+            "doctype": doc_type,
             "document_height": document_height,
             "document_width": document_width,
             "localstorage_size": localstorage_size,
