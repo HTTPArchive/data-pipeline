@@ -439,7 +439,7 @@ class HarJsonToSummary:
         )
 
         doc_type = (
-            json.dumps(page.get("_doctype"))
+            str(page.get("_doctype"))
             if page.get("_doctype")
             else None
         )
