@@ -140,7 +140,7 @@ class TestWriteBigQuery(TestCase):
             original = WriteBigQuery(table_reference, schema, additional_parameters)
 
         p = TestPipeline()
-        p | "MyWriteBigQuery" >> original
+        _ = p | "MyWriteBigQuery" >> original
 
         # Run the pipeline through to generate a pipeline proto from an empty
         # context. This ensures that the serialization code ran.
