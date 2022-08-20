@@ -10,7 +10,11 @@ from apache_beam.testing.test_pipeline import TestPipeline
 from apache_beam.testing.util import assert_that, equal_to
 
 from modules.transformation import HarJsonToSummary, HarJsonToSummaryDoFn
-from modules.transformation import ReadHarFiles, add_common_pipeline_options, WriteBigQuery
+from modules.transformation import (
+    ReadHarFiles,
+    add_common_pipeline_options,
+    WriteBigQuery,
+)
 
 
 class TestImportHarJson(TestCase):
@@ -46,7 +50,9 @@ class TestImportHarJson(TestCase):
             next(HarJsonToSummaryDoFn().process(("file_name", "data")))
 
     def test_import_har_json(self):
-        with mock.patch("modules.transformation.HarJsonToSummary.generate_pages") as mock_generate_pages:
+        with mock.patch(
+            "modules.transformation.HarJsonToSummary.generate_pages"
+        ) as mock_generate_pages:
             expected_page = {"page": "foo"}
             expected_requests = [{"requests": "bar"}]
             mock_generate_pages.return_value = (expected_page, expected_requests)
@@ -55,10 +61,14 @@ class TestImportHarJson(TestCase):
                 page, requests = (
                     p
                     | beam.Create([("file_name", "data")])
-                    | beam.ParDo(HarJsonToSummaryDoFn()).with_outputs("page", "requests")
+                    | beam.ParDo(HarJsonToSummaryDoFn()).with_outputs(
+                        "page", "requests"
+                    )
                 )
                 assert_that(page, equal_to([expected_page]), label="PagesMatch")
-                assert_that(requests, equal_to([expected_requests]), label="RequestsMatch")
+                assert_that(
+                    requests, equal_to([expected_requests]), label="RequestsMatch"
+                )
 
 
 class TestTransformation(TestCase):
@@ -97,7 +107,9 @@ class TestReadHarFiles(TestCase):
 
     def test_input(self):
         with TestPipeline() as p:
-            file_name, expected_data = self.write_data(b"foo", ".har.gz", compressed=True)
+            file_name, expected_data = self.write_data(
+                b"foo", ".har.gz", compressed=True
+            )
             expected_data = [(file_name, line) for line in expected_data]
 
             pcoll = p | ReadHarFiles(input=file_name)
@@ -105,10 +117,14 @@ class TestReadHarFiles(TestCase):
 
     def test_input_file(self):
         with TestPipeline() as p:
-            har_file_name, har_expected_data = self.write_data(b"foo", ".har.gz", compressed=True)
+            har_file_name, har_expected_data = self.write_data(
+                b"foo", ".har.gz", compressed=True
+            )
             expected_data = [(har_file_name, line) for line in har_expected_data]
 
-            manifest_file_name, manifest_expected_data = self.write_data(har_file_name.encode("utf-8"), ".txt")
+            manifest_file_name, manifest_expected_data = self.write_data(
+                har_file_name.encode("utf-8"), ".txt"
+            )
 
             pcoll = p | ReadHarFiles(input_file=manifest_file_name)
             assert_that(pcoll, equal_to(expected_data))
@@ -124,18 +140,19 @@ class TestWriteBigQuery(TestCase):
             original = WriteBigQuery(table_reference, schema, additional_parameters)
 
         p = TestPipeline()
-        p | 'MyWriteBigQuery' >> original
+        p | "MyWriteBigQuery" >> original
 
         # Run the pipeline through to generate a pipeline proto from an empty
         # context. This ensures that the serialization code ran.
         pipeline_proto, context = TestPipeline.from_runner_api(
-            p.to_runner_api(), p.runner, p.get_pipeline_options()).to_runner_api(
-            return_context=True)
+            p.to_runner_api(), p.runner, p.get_pipeline_options()
+        ).to_runner_api(return_context=True)
 
         # Find the transform from the context.
         write_to_bq_id = [
-            k for k, v in pipeline_proto.components.transforms.items()
-            if v.unique_name == 'MyWriteBigQuery'
+            k
+            for k, v in pipeline_proto.components.transforms.items()
+            if v.unique_name == "MyWriteBigQuery"
         ][0]
         deserialized_node = context.transforms.get_by_id(write_to_bq_id)
         return original, deserialized_node.parts[0].transform
@@ -148,15 +165,19 @@ class TestWriteBigQuery(TestCase):
         table = "table"
         table_reference = f"{project}:{dataset}.{table}"
 
-        _, deserialized = self.transformations(table_reference, schema, additional_parameters)
+        _, deserialized = self.transformations(
+            table_reference, schema, additional_parameters
+        )
         deser_tbl_ref = deserialized.table_reference
 
         self.assertIsInstance(deserialized, WriteToBigQuery)
-        self.assertLessEqual(additional_parameters.items(), deserialized.additional_bq_parameters.items())
+        self.assertLessEqual(
+            additional_parameters.items(), deserialized.additional_bq_parameters.items()
+        )
         self.assertEqual(deserialized.schema, schema)
         self.assertEqual(
             f"{deser_tbl_ref.projectId}:{deser_tbl_ref.datasetId}.{deser_tbl_ref.tableId}",
-            table_reference
+            table_reference,
         )
 
     def test_default_parameters(self):
@@ -165,10 +186,18 @@ class TestWriteBigQuery(TestCase):
 
         original, deserialized = self.transformations(table_reference, schema)
 
-        self.assertEqual(deserialized.method, original.default_parameters['method'])
-        self.assertEqual(deserialized.create_disposition, original.default_parameters['create_disposition'])
-        self.assertEqual(deserialized.write_disposition, original.default_parameters['write_disposition'])
+        self.assertEqual(deserialized.method, original.default_parameters["method"])
         self.assertEqual(
-            deserialized.additional_bq_parameters['ignoreUnknownValues'],
-            original.default_parameters['additional_bq_parameters']['ignoreUnknownValues']
+            deserialized.create_disposition,
+            original.default_parameters["create_disposition"],
+        )
+        self.assertEqual(
+            deserialized.write_disposition,
+            original.default_parameters["write_disposition"],
+        )
+        self.assertEqual(
+            deserialized.additional_bq_parameters["ignoreUnknownValues"],
+            original.default_parameters["additional_bq_parameters"][
+                "ignoreUnknownValues"
+            ],
         )
