@@ -1,9 +1,9 @@
+# data-pipeline
+The new HTTP Archive data pipeline built entirely on GCP
+
 ![GitHub branch checks state](https://github.com/HTTPArchive/data-pipeline/actions/workflows/code-static-analysis.yml/badge.svg?branch=main)
 ![GitHub branch checks state](https://github.com/HTTPArchive/data-pipeline/actions/workflows/linter.yml/badge.svg?branch=main)
 ![GitHub branch checks state](https://github.com/HTTPArchive/data-pipeline/actions/workflows/unittest.yml/badge.svg?branch=main)
-
-# data-pipeline
-The new HTTP Archive data pipeline built entirely on GCP
 
 - [Run the pipeline](#run-the-pipeline)
   * [Pipeline types](#pipeline-types)
