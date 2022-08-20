@@ -67,9 +67,7 @@ class WriteBigQuery(beam.PTransform):
         self.table = table
         self.schema = schema
         self.additional_bq_parameters = additional_bq_parameters
-
-    def resolve_params(self):
-        return {
+        self.default_parameters = {
             "method": WriteToBigQuery.Method.FILE_LOADS,
             "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
             "write_disposition": BigQueryDisposition.WRITE_APPEND,
@@ -81,7 +79,7 @@ class WriteBigQuery(beam.PTransform):
 
     def expand(self, pcoll, **kwargs):
         return pcoll | WriteToBigQuery(
-            table=self.table, schema=self.schema, **self.resolve_params()
+            table=self.table, schema=self.schema, **self.default_parameters
         )
 
 
