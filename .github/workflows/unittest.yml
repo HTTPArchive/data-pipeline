@@ -35,7 +35,7 @@ jobs:
           COVERAGE_FILE: ".coverage.${{ matrix.python-version }}"
 
       - name: Store coverage file
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3.1.0
         with:
           name: coverage
           path: .coverage.${{ matrix.python-version }}
@@ -45,10 +45,11 @@ jobs:
         uses: ewjoachim/python-coverage-comment-action@v2.1.0
         with:
           GITHUB_TOKEN: ${{ github.token }}
+          MERGE_COVERAGE_FILES: true
           VERBOSE: true
 
       - name: Store Pull Request comment to be posted
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3.1.0
         if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
         with:
           # If you use a different name, update COMMENT_ARTIFACT_NAME accordingly
