@@ -28,21 +28,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      
+
       - name: "Test: unittest and code coverage"
         run: coverage run
         env:
           COVERAGE_FILE: ".coverage.${{ matrix.python-version }}"
-      
+
       - name: Store coverage file
         uses: actions/upload-artifact@v2
         with:
           name: coverage
           path: .coverage.${{ matrix.python-version }}
-      
+
       - name: Coverage comment
         id: coverage_comment
-        uses: ewjoachim/python-coverage-comment-action@v2
+        uses: ewjoachim/python-coverage-comment-action@v2.1.0
         with:
           GITHUB_TOKEN: ${{ github.token }}
           VERBOSE: true
