@@ -7,7 +7,6 @@ omit = test/*
 relative_files = True
 
 [report]
-fail_under = 70
 skip_empty = True
 
 [html]
