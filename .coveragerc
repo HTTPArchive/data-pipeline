@@ -1,0 +1,14 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+command_line = -m unittest
+dynamic_context = test_function
+omit = test/*
+relative_files = True
+
+[report]
+skip_empty = True
+
+[html]
+show_contexts = True
+skip_empty = True
