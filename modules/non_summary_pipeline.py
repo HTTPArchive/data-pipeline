@@ -358,7 +358,9 @@ def get_parsed_css(har):
     if metadata:
         page_url = metadata.get("tested_url", page_url)
 
-    is_root_page = is_home_page(har)
+    is_root_page = True
+    if metadata:
+        is_root_page = metadata.get("crawl_depth") == 0
 
     custom_metric = page.get("_parsed_css")
 
