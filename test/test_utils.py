@@ -167,20 +167,34 @@ class Test(TestCase):
     def test_format_table_name_exception(self):
         with self.assertLogs(level="ERROR") as log:
             self.assertRaises(Exception, utils.format_table_name, None, None)
-            self.assertRaises(Exception, utils.format_table_name, dict(), "project_name:dataset_name")
+            self.assertRaises(
+                Exception, utils.format_table_name, dict(), "project_name:dataset_name"
+            )
             self.assertEqual(len(log), 2)
             self.assertIn("Unable to determine full table name.", log.output[0])
 
     def test_dict_subset(self):
         tests = [
             ("contains_all_keys", {"foo": "bar"}, ["foo"], {"foo": "bar"}),
-            ("contains_some_keys", {"foo": "bar", "baz": "qux"}, ["foo"], {"foo": "bar"}),
+            (
+                "contains_some_keys",
+                {"foo": "bar", "baz": "qux"},
+                ["foo"],
+                {"foo": "bar"},
+            ),
             ("contains_no_keys", {"baz": "qux"}, ["foo"], dict()),
         ]
 
         for name, input_dict, input_keys, expected_dict in tests:
-            with self.subTest(name, input_dict=input_dict, input_keys=input_keys, expected_dict=expected_dict):
-                self.assertDictEqual(expected_dict, utils.dict_subset(input_dict, input_keys))
+            with self.subTest(
+                name,
+                input_dict=input_dict,
+                input_keys=input_keys,
+                expected_dict=expected_dict,
+            ):
+                self.assertDictEqual(
+                    expected_dict, utils.dict_subset(input_dict, input_keys)
+                )
 
     def test_dict_subset_empty_dict(self):
         self.assertIsNone(utils.dict_subset(None, None))
@@ -193,7 +207,7 @@ class Test(TestCase):
     def test_date_and_client_from_file_name(self):
         self.assertTupleEqual(
             (datetime.datetime.fromisoformat("2022-01-01"), "desktop"),
-            utils.date_and_client_from_file_name("/chrome-Jan_1_2022/foo.har.gz")
+            utils.date_and_client_from_file_name("/chrome-Jan_1_2022/foo.har.gz"),
         )
 
     def test_client_name(self):
@@ -210,13 +224,18 @@ class Test(TestCase):
                 self.assertEqual(utils.client_name(given), expect)
 
     @mock.patch.dict(
-        "modules.constants.BIGQUERY", {
+        "modules.constants.BIGQUERY",
+        {
             "schemas": {
-                    "test_table": {
-                        "fields": [
-                            {"name": "foo", "type": "STRING"},
-                            {"name": "bar", "type": "INTEGER"},
-                        ]}}})
+                "test_table": {
+                    "fields": [
+                        {"name": "foo", "type": "STRING"},
+                        {"name": "bar", "type": "INTEGER"},
+                    ]
+                }
+            }
+        },
+    )
     def test_int_columns_for_schema(self):
         self.assertEqual(["bar"], utils.int_columns_for_schema("test_table"))
 
@@ -233,22 +252,66 @@ class Test(TestCase):
 
     def test_parse_header(self):
         tests = [
-            ("standard_header", ({"req_foo": ["bar"]}, "", 0), [{"name": "foo", "value": "bar"}], {"foo": "req_foo"}, None, None),
-            ("cookie_key", (dict(), "", len("bar")), [{"name": "foo", "value": "bar"}], dict(), "foo", None),
-            ("other_header", (dict(), "foo = bar", 0), [{"name": "foo", "value": "bar"}], dict(), None, None),
-            ("combine_input_output", ({"req_foo": ["bar"], "baz": ["qux"]}, "", 0), [{"name": "foo", "value": "bar"}], {"foo": "req_foo"}, None, {"baz": ["qux"]}),
-            ("append_output", ({"req_foo": ["bar", "baz"]}, "", 0), [{"name": "foo", "value": "bar"}, {"name": "foo", "value": "baz"}], {"foo": "req_foo"}, None, None),
+            (
+                "standard_header",
+                ({"req_foo": ["bar"]}, "", 0),
+                [{"name": "foo", "value": "bar"}],
+                {"foo": "req_foo"},
+                None,
+                None,
+            ),
+            (
+                "cookie_key",
+                (dict(), "", len("bar")),
+                [{"name": "foo", "value": "bar"}],
+                dict(),
+                "foo",
+                None,
+            ),
+            (
+                "other_header",
+                (dict(), "foo = bar", 0),
+                [{"name": "foo", "value": "bar"}],
+                dict(),
+                None,
+                None,
+            ),
+            (
+                "combine_input_output",
+                ({"req_foo": ["bar"], "baz": ["qux"]}, "", 0),
+                [{"name": "foo", "value": "bar"}],
+                {"foo": "req_foo"},
+                None,
+                {"baz": ["qux"]},
+            ),
+            (
+                "append_output",
+                ({"req_foo": ["bar", "baz"]}, "", 0),
+                [{"name": "foo", "value": "bar"}, {"name": "foo", "value": "baz"}],
+                {"foo": "req_foo"},
+                None,
+                None,
+            ),
         ]
 
-        for name, expected, input_headers, standard_headers, cookie_key, output_headers in tests:
+        for (
+            name,
+            expected,
+            input_headers,
+            standard_headers,
+            cookie_key,
+            output_headers,
+        ) in tests:
             with self.subTest(
                 name,
                 input_headers=input_headers,
                 standard_headers=standard_headers,
                 cookie_key=cookie_key,
-                output_headers=output_headers
+                output_headers=output_headers,
             ):
                 self.assertTupleEqual(
                     expected,
-                    utils.parse_header(input_headers, standard_headers, cookie_key, output_headers)
+                    utils.parse_header(
+                        input_headers, standard_headers, cookie_key, output_headers
+                    ),
                 )
