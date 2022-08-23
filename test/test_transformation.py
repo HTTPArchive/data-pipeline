@@ -49,6 +49,13 @@ class TestImportHarJson(TestCase):
         with self.assertRaises(StopIteration):
             next(HarJsonToSummaryDoFn().process(("file_name", "data")))
 
+    @mock.patch("modules.transformation.HarJsonToSummary.generate_pages", RuntimeError)
+    def test_import_har_json_exception(self):
+        with self.assertLogs(level="ERROR") as log:
+            with self.assertRaises(Exception):
+                next(HarJsonToSummaryDoFn().process(("file_name", "data")))
+            self.assertIn("Unable to unpack HAR", log.output[0])
+
     def test_import_har_json(self):
         with mock.patch(
             "modules.transformation.HarJsonToSummary.generate_pages"

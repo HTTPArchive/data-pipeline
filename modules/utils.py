@@ -11,7 +11,7 @@ BIGQUERY_MAX_INT = 2**63 - 1
 
 
 def dict_subset(original_dict, wanted_keys):
-    if original_dict is None:
+    if not original_dict or not wanted_keys:
         return None
 
     new_dict = dict()
@@ -19,10 +19,6 @@ def dict_subset(original_dict, wanted_keys):
         if k.lower() in map(str.lower, wanted_keys):
             new_dict[k] = v
     return new_dict
-
-
-def remove_empty_keys(d):
-    return {k: v for k, v in d if v is not None}
 
 
 def get_url_hash(url):
