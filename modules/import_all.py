@@ -173,12 +173,13 @@ def get_features(page, wptid):
                     continue
 
                 feature_names.append({"feature": key, "type": feature_type, "id": ""})
-        except ValueError:
+        except (ValueError, AttributeError):
             logging.warning(
                 "Unable to get feature names for %s. Feature_type: %s, feature_map: %s",
                 wptid,
                 feature_type,
                 feature_map,
+                exc_info=True,
             )
 
         return feature_names
