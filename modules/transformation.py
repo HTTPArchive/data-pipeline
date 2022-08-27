@@ -109,6 +109,9 @@ class HarJsonToSummary:
 
         metadata = page.get("_metadata", {})
 
+        # `_metadata.pageid` used on and prior to 2022-03-01, `_metadata.page_id` used going forward
+        pageid = metadata["page_id"] if "page_id" in metadata else metadata["pageid"]
+
         return {
             "archive": "All",  # only one value found when porting logic from PHP
             "label": "{dt:%b} {dt.day} {dt.year}".format(dt=date),
@@ -116,9 +119,7 @@ class HarJsonToSummary:
             "wptid": page.get("testID", base_name.split(".")[0]),
             "medianRun": 1,  # only available in RAW json (median.firstview.run), not HAR json
             "page": metadata.get("tested_url", ""),
-            "pageid": utils.clamp_integer(metadata["page_id"])
-            if metadata.get("page_id")
-            else None,
+            "pageid": utils.clamp_integer(pageid),
             "rank": utils.clamp_integer(metadata["rank"])
             if metadata.get("rank")
             else None,
