@@ -14,7 +14,6 @@ The new HTTP Archive data pipeline built entirely on GCP
 - [Known issues](#known-issues)
   * [Dataflow](#dataflow)
     + [Logging](#logging)
-    + [RuntimeError: VarLong too long](#runtimeerror-varlong-too-long)
   * [Response cache-control max-age](#response-cache-control-max-age)
   * [New file formats](#new-file-formats)
   * [mimetypes and file extensions](#mimetypes-and-file-extensions)
@@ -75,12 +74,6 @@ END FOR;
 
 This log message is benign and expected when using an auto-scaling pipeline
 https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
-
-#### RuntimeError: VarLong too long
-
-This is a known issue when using the DirectRunner on Windows 10 with the Beam Python SDK
-
-https://issues.apache.org/jira/browse/BEAM-11037
 
 ### Response cache-control max-age
 
