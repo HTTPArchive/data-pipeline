@@ -76,12 +76,6 @@ END FOR;
 This log message is benign and expected when using an auto-scaling pipeline
 https://cloud.google.com/dataflow/docs/guides/common-errors#work-item-not-valid
 
-#### RuntimeError: VarLong too long
-
-This is a known issue when using the DirectRunner on Windows 10 with the Beam Python SDK
-
-https://issues.apache.org/jira/browse/BEAM-11037
-
 ### Response cache-control max-age
 
 Various parsing issues due to unhandled cases
