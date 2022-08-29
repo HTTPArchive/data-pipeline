@@ -14,7 +14,6 @@ The new HTTP Archive data pipeline built entirely on GCP
 - [Known issues](#known-issues)
   * [Dataflow](#dataflow)
     + [Logging](#logging)
-    + [RuntimeError: VarLong too long](#runtimeerror-varlong-too-long)
   * [Response cache-control max-age](#response-cache-control-max-age)
   * [New file formats](#new-file-formats)
   * [mimetypes and file extensions](#mimetypes-and-file-extensions)
