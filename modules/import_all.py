@@ -91,7 +91,7 @@ def get_page(max_content_size, file_name, har):
         "lighthouse": lighthouse,
         "features": features,
         "technologies": technologies,
-        "metadata": to_json(metadata),
+        "metadata": to_json(metadata) if metadata else None,
     }
 
     if json_exceeds_max_content_size(ret, max_content_size, "pages", wptid):
