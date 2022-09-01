@@ -91,7 +91,7 @@ def get_page(max_content_size, file_name, har):
         "lighthouse": lighthouse,
         "features": features,
         "technologies": technologies,
-        "metadata": to_json(metadata),
+        "metadata": to_json(metadata) if metadata else None,
     }
 
     if json_exceeds_max_content_size(ret, max_content_size, "pages", wptid):
@@ -173,12 +173,13 @@ def get_features(page, wptid):
                     continue
 
                 feature_names.append({"feature": key, "type": feature_type, "id": ""})
-        except ValueError:
+        except (ValueError, AttributeError):
             logging.warning(
                 "Unable to get feature names for %s. Feature_type: %s, feature_map: %s",
                 wptid,
                 feature_type,
                 feature_map,
+                exc_info=True,
             )
 
         return feature_names
