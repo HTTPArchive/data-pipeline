@@ -12,7 +12,7 @@ class WriteSummaryPagesToBigQuery(beam.PTransform):
     def expand(self, pages):
         home_pages = pages | "FilterHomePages" >> beam.Filter(utils.is_home_page)
 
-        _ = (
+        _ = (  # pragma: no branch
             home_pages
             | "WriteHomePagesToBigQuery"
             >> transformation.WriteBigQuery(
@@ -31,7 +31,7 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
         self.standard_options = standard_options
 
     def expand(self, requests):
-        requests = requests | "FlattenRequests" >> beam.FlatMap(
+        requests = requests | "FlattenRequests" >> beam.FlatMap(  # pragma: no branch
             lambda elements: elements
         )
 
@@ -39,7 +39,7 @@ class WriteSummaryRequestsToBigQuery(beam.PTransform):
             utils.is_home_page
         )
 
-        _ = (
+        _ = (  # pragma: no branch
             home_requests
             | "WriteHomeRequestsToBigQuery"
             >> transformation.WriteBigQuery(

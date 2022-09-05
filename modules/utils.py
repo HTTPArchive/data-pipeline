@@ -108,11 +108,11 @@ def get_format(pretty_typ, mime_typ, ext):
         ]:
             if typ in mime_typ or typ == ext:
                 return typ
-        if "jpeg" in mime_typ:
+        if "jpeg" in mime_typ:  # pragma: no branch
             return "jpg"
     if "video" == pretty_typ:
         # Order by most popular first.
-        for typ in ["flash", "swf", "mp4", "flv", "f4v"]:
+        for typ in ["flash", "swf", "mp4", "flv", "f4v"]:  # pragma: no branch
             if typ in mime_typ or typ == ext:
                 return typ
     return ""
@@ -205,7 +205,7 @@ def clamp_integers(data, columns):
         if k in columns and v and int(v) > BIGQUERY_MAX_INT:
             violations[k] = v
             data[k] = clamp_integer(v)
-    if violations:
+    if violations:  # pragma: no branch
         logging.warning(f"Clamping required for {violations}. data={data}")
 
 
