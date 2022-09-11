@@ -1,4 +1,5 @@
 import argparse
+import copy
 import gzip
 import os
 import tempfile
@@ -17,7 +18,103 @@ from modules.transformation import (
 )
 
 
-class TestImportHarJson(TestCase):
+class TestHarJsonToSummary(TestCase):
+    page_fixture = {
+        "_metadata": {
+            "rank": 10000000,
+            "page_id": 12345,
+            "tested_url": "https://www.test.com/",
+            "layout": "Desktop",
+        },
+        "testID": "220101_Dx1",
+    }
+
+    har_fixture = {
+        "log": {
+            "pages": [
+                {"foo": "bar", "_metadata": page_fixture["_metadata"]},
+            ],
+            "entries": [{"baz": "qux"}],
+        },
+    }
+
+    expected_status_info_fixture = {
+        "archive": "All",
+        "label": "Jan 1 2022",
+        "crawlid": 0,
+        "wptid": "220101_Dx1",
+        "medianRun": 1,
+        "page": "https://www.test.com/",
+        "pageid": 12345,
+        "rank": 10000000,
+        "date": "2022_01_01",
+        "client": "desktop",
+    }
+
+    file_name_fixture = "chrome-Jan_1_2022/220101_Dx1.har.gz"
+
+    def test_initialize_status_info(self):
+        status_info = HarJsonToSummary.initialize_status_info(
+            self.file_name_fixture, self.page_fixture
+        )
+        self.assertDictEqual(self.expected_status_info_fixture, status_info)
+
+    def test_initialize_status_info_pageid(self):
+        page = copy.deepcopy(self.page_fixture)
+        metadata = page["_metadata"]
+        # replace test fixture key named `page_id` with `pageid`
+        metadata["pageid"] = metadata.pop("page_id")
+
+        self.assertDictEqual(
+            self.expected_status_info_fixture,
+            HarJsonToSummary.initialize_status_info(
+                self.file_name_fixture, self.page_fixture
+            ),
+        )
+
+    def test_initialize_status_info_missing_metadata(self):
+        tests = [
+            ("no_crawlid", "crawlid", "crawlid", 0),
+            ("no_tested_url", "tested_url", "page", ""),
+            ("no_rank", "rank", "rank", None),
+        ]
+
+        for name, metadata_key, status_info_key, expected in tests:
+            with self.subTest(
+                name,
+                metadata_key=metadata_key,
+                status_info_key=status_info_key,
+                expected=expected,
+            ):
+                expected_status_info = copy.deepcopy(self.expected_status_info_fixture)
+                expected_status_info[status_info_key] = expected
+
+                page = copy.deepcopy(self.page_fixture)
+                page["_metadata"].pop(metadata_key, None)
+
+                self.assertDictEqual(
+                    expected_status_info,
+                    HarJsonToSummary.initialize_status_info(
+                        self.file_name_fixture, page
+                    ),
+                )
+
+    def test_initialize_status_info_default_testid(self):
+        page = copy.deepcopy(self.page_fixture)
+        page.pop("testID", None)
+        self.assertDictEqual(
+            self.expected_status_info_fixture,
+            HarJsonToSummary.initialize_status_info(self.file_name_fixture, page),
+        )
+
+    def test_initialize_status_info_default_layout(self):
+        page = copy.deepcopy(self.page_fixture)
+        page["_metadata"].pop("layout", None)
+        self.assertDictEqual(
+            self.expected_status_info_fixture,
+            HarJsonToSummary.initialize_status_info(self.file_name_fixture, page),
+        )
+
     def test_generate_pages_none_error(self):
         with self.assertLogs(level="WARNING") as log:
             ret = HarJsonToSummary.generate_pages("foo", None)
@@ -41,10 +138,95 @@ class TestImportHarJson(TestCase):
             self.assertIn("No pages found", log.output[0])
             self.assertEqual(ret, (None, None))
 
+    def test_generate_pages_unexpected_element_type(self):
+        with self.assertLogs(level="WARNING") as log:
+            ret = HarJsonToSummary.generate_pages("foo", 1)
+            self.assertEqual(1, len(log.output))
+            self.assertEqual(1, len(log.records))
+            self.assertIn("Unexpected type for", log.output[0])
+            self.assertEqual((None, None), ret)
+
+    def test_generate_pages_import_page_empty_error(self):
+        with self.assertLogs(level="WARNING") as log, mock.patch(
+            "modules.transformation.HarJsonToSummary.initialize_status_info",
+            return_value=self.expected_status_info_fixture,
+        ):
+            ret = HarJsonToSummary.generate_pages("foo", '{"log": {"pages": [{}]}}')
+            self.assertEqual(1, len(log.output))
+            self.assertEqual(1, len(log.records))
+            self.assertIn("import_page() failed for status_info", log.output[0])
+            self.assertEqual((None, None), ret)
+
+    def test_generate_pages_import_entries_empty_error(self):
+        with self.assertLogs(level="WARNING") as log, mock.patch(
+            "modules.transformation.HarJsonToSummary.initialize_status_info",
+            return_value=self.expected_status_info_fixture,
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_page", return_value=dict()
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_entries",
+            return_value=([], "", ""),
+        ):
+            ret = HarJsonToSummary.generate_pages(
+                "foo", '{"log": {"pages": [{}], "entries": []}}'
+            )
+            self.assertEqual(1, len(log.output))
+            self.assertEqual(1, len(log.records))
+            self.assertIn("import_entries() failed for status_info", log.output[0])
+            self.assertEqual((None, None), ret)
+
+    def test_generate_pages_aggregate_stats_empty_error(self):
+        with self.assertLogs(level="WARNING") as log, mock.patch(
+            "modules.transformation.HarJsonToSummary.initialize_status_info",
+            return_value=self.expected_status_info_fixture,
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_page", return_value=dict()
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_entries",
+            return_value=([dict()], "", ""),
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.aggregate_stats",
+            return_value=dict(),
+        ):
+            ret = HarJsonToSummary.generate_pages(
+                "foo", '{"log": {"pages": [{}], "entries": []}}'
+            )
+            self.assertEqual(1, len(log.output))
+            self.assertEqual(1, len(log.records))
+            self.assertIn("aggregate_stats() failed for status_info", log.output[0])
+            self.assertEqual((None, None), ret)
+
+    def test_generate_pages_dict(self):
+        self.assertTupleEqual(
+            (None, None),
+            HarJsonToSummary.generate_pages(self.file_name_fixture, self.har_fixture),
+        )
+
     def test_import_page_empty_status_info(self):
         with self.assertRaises(Exception):
             HarJsonToSummary.import_page(None, {})
 
+    def test_generate_pages(self):
+        with mock.patch(
+            "modules.transformation.HarJsonToSummary.initialize_status_info",
+            return_value=self.expected_status_info_fixture,
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_page", return_value=dict()
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.import_entries",
+            return_value=([dict()], "", ""),
+        ), mock.patch(
+            "modules.transformation.HarJsonToSummary.aggregate_stats",
+            return_value={"foo": "bar"},
+        ):
+            page, entries = HarJsonToSummary.generate_pages(
+                self.file_name_fixture, self.har_fixture
+            )
+            self.assertDictEqual({"foo": "bar"}, page)
+            self.assertEqual([dict()], entries)
+
+
+class TestHarJsonToSummaryDoFn(TestCase):
     def test_import_har_json_bad_data(self):
         with self.assertRaises(StopIteration):
             next(HarJsonToSummaryDoFn().process(("file_name", "data")))
