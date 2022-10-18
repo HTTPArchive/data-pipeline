@@ -22,19 +22,35 @@ The new HTTP Archive data pipeline built entirely on GCP
 
 
 ## Run the pipeline
+Dataflow jobs can be triggered locally using the `run_pipeline*.sh` scripts or using glex templates from the Cloud Console.
 
 ```shell
-./run_pipeline_batch.sh
+# run the pipeline locally
+./run_pipeline_combined.sh
+./run_pipeline_all.sh
+
+# run the pipeline using a flex template
+./run_flex_template all [...]
+./run_flex_template combined [...]
 ```
+
+Flex templates accept additional parameters as mentioned in the GCP documentation below, while custom parameters are defined in `flex_template_metadata_*.json`
+
+https://cloud.google.com/dataflow/docs/guides/templates/configuring-flex-templates#specify-options
+
+https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run-a-flex-template-pipeline
+
 
 ### Pipeline types
 
-By default, running the pipeline will run in "combined" mode to produce summary and non-summary tables.
-This can be controlled using the `--pipeline_type` argument.
+Running the `combined` pipeline will produce summary and non-summary tables by default.
+Summary and non-summary outputs can be controlled using the `--pipeline_type` argument.
 
 ```shell
 # example
-./run_pipeline_batch.sh --pipeline_type=summary
+./run_pipeline_combined.sh --pipeline_type=summary
+
+./run_flex_template.sh combined --parameters pipeline_type=summary
 ```
 
 ## Inputs

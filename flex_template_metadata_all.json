@@ -1,0 +1,30 @@
+{
+    "name": "HTTPArchive data-pipeline",
+    "description": "Runs the HTTPArchive data-pipeline",
+    "parameters": [
+        {
+            "name": "input",
+            "label":"GCS input path",
+            "helpText": "Input Cloud Storage directory to process.",
+            "isOptional": true
+        },
+        {
+            "name": "input_file",
+            "label":"GCS input file",
+            "helpText": "Input file containing a list of HAR files",
+            "isOptional": true
+        },
+        {
+            "name": "dataset_all_pages",
+            "label":"Dataset all pages",
+            "helpText": "BigQuery dataset to write all.pages table",
+            "isOptional": true
+        },
+        {
+            "name": "dataset_all_requests",
+            "label":"Dataset all requests",
+            "helpText": "BigQuery dataset to write all.requests table",
+            "isOptional": true
+        }
+    ]
+}

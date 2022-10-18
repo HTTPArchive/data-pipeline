@@ -1,6 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
-python3 run_pipeline.py \
+python3 run_combined.py \
   --input_file=gs://httparchive/crawls_manifest/chrome-Jul_6_2022.txt \
   --runner=DataflowRunner \
   --project=httparchive \
