@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -e
 
@@ -9,8 +9,7 @@ REGION="us-west1"
 # type is the first script argument
 TYPE="${1}"
 DF_JOB_ID="${REPO}-${TYPE}-$(date +%Y%m%d-%H%M%S)"
-DF_WORKER_SA="dataflow-service-account@${PROJECT}.iam.gserviceaccount.com"
-DF_TEMP_BUCKET="gs://${PROJECT}/httparchive-staging"
+DF_TEMP_BUCKET="gs://${PROJECT}-staging/dataflow"
 TEMPLATE_BASE_PATH="gs://${PROJECT}/dataflow/templates"
 
 case "${TYPE}~${TEMPLATE_PATH}" in
@@ -38,7 +37,6 @@ set -u
 
 gcloud dataflow flex-template run ${DF_JOB_ID} \
     --template-file-gcs-location="${TEMPLATE_PATH}" \
-    --service-account-email=${DF_WORKER_SA} \
-    --staging-location=${DF_TEMP_BUCKET}/tmp \
+    --staging-location=${DF_TEMP_BUCKET} \
     --region=${REGION} \
     $@
