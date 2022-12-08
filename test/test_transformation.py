@@ -49,6 +49,12 @@ class TestHarJsonToSummary(TestCase):
         "rank": 10000000,
         "date": "2022_01_01",
         "client": "desktop",
+        "metadata": {
+            "layout": "Desktop",
+            "page_id": 12345,
+            "rank": 10000000,
+            "tested_url": "https://www.test.com/",
+        },
     }
 
     file_name_fixture = "chrome-Jan_1_2022/220101_Dx1.har.gz"
@@ -88,6 +94,7 @@ class TestHarJsonToSummary(TestCase):
             ):
                 expected_status_info = copy.deepcopy(self.expected_status_info_fixture)
                 expected_status_info[status_info_key] = expected
+                expected_status_info["metadata"].pop(metadata_key, None)
 
                 page = copy.deepcopy(self.page_fixture)
                 page["_metadata"].pop(metadata_key, None)
@@ -110,8 +117,10 @@ class TestHarJsonToSummary(TestCase):
     def test_initialize_status_info_default_layout(self):
         page = copy.deepcopy(self.page_fixture)
         page["_metadata"].pop("layout", None)
+        expected_status_info = copy.deepcopy(self.expected_status_info_fixture)
+        expected_status_info["metadata"].pop("layout", None)
         self.assertDictEqual(
-            self.expected_status_info_fixture,
+            expected_status_info,
             HarJsonToSummary.initialize_status_info(self.file_name_fixture, page),
         )
 

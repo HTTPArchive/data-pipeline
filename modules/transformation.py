@@ -123,6 +123,7 @@ class HarJsonToSummary:
             "rank": utils.clamp_integer(metadata["rank"]) if metadata.get("rank") else None,
             "date": "{:%Y_%m_%d}".format(date),
             "client": metadata.get("layout", client_name).lower(),
+            "metadata": metadata,
         }
 
     @staticmethod
@@ -219,6 +220,7 @@ class HarJsonToSummary:
             "date": status_info["date"],
             "pageid": status_info["pageid"],
             "crawlid": status_info["crawlid"],
+            "metadata": status_info["metadata"],
             # we use this below for expAge calculation
             "startedDateTime": utils.datetime_to_epoch(
                 entry["startedDateTime"], status_info
@@ -442,7 +444,7 @@ class HarJsonToSummary:
         )
 
         return {
-            "metadata": json.dumps(page.get("_metadata")),  # TODO TEST ME
+            "metadata": json.dumps(status_info["metadata"]),
             "client": status_info["client"],
             "date": status_info["date"],
             "pageid": status_info["pageid"],
