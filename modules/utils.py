@@ -218,7 +218,10 @@ def is_home_page(element):
     metadata = element.get("metadata")
     if metadata:
         # use metadata.crawl_depth starting from 2022-05
-        return json.loads(metadata).get("crawl_depth", 0) == 0
+        if isinstance(metadata, dict):
+            return metadata.get("crawl_depth", 0) == 0
+        else:
+            return json.loads(metadata).get("crawl_depth", 0) == 0
     else:
         # legacy crawl data is all home-page only (i.e. no secondary pages)
         return True
