@@ -59,9 +59,11 @@ This pipeline can read individual HAR files, or a single file containing a list 
 
 ```shell
 # Run the `all` pipeline on both desktop and mobile using their pre-generated manifests.
-./run_flex_template.sh all --parameters input_file=gs://httparchive/crawls_manifest/*-Nov_1_2022
+./run_flex_template.sh all --parameters input_file=gs://httparchive/crawls_manifest/*-Nov_1_2022.txt
+
 # Run the `combined` pipeline on mobile using its manifest.
-./run_flex_template.sh combined --parameters input_file=gs://httparchive/crawls_manifest/android-Nov_1_2022
+./run_flex_template.sh combined --parameters input_file=gs://httparchive/crawls_manifest/android-Nov_1_2022.txt
+
 # Run the `combined` pipeline on desktop using its individual HAR files (much slower, not encouraged).
 ./run_flex_template.sh combined --parameters input=gs://httparchive/crawls/chrome-Nov_1_2022
 ```
