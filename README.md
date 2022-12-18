@@ -52,7 +52,8 @@ nohup gsutil ls gs://httparchive/crawls/chrome-Nov_1_2022 > chrome-Nov_1_2022.tx
 nohup gsutil ls gs://httparchive/crawls/android-Nov_1_2022 > android-Nov_1_2022.txt 2> android-Nov_1_2022.err &
 
 # watch for completion (i.e. file sizes will stop changing)
-watch ls -l ./*Nov*.txt
+#   if the err file increases in size, open and check for issues
+watch ls -l ./*Nov*
 
 # upload to GCS
 gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
