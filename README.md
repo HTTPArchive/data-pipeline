@@ -7,6 +7,9 @@ The new HTTP Archive data pipeline built entirely on GCP
 ![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wiki/HTTPArchive/data-pipeline/python-coverage-comment-action-badge.json)
 
 - [Run the pipeline](#run-the-pipeline)
+  * [Locally using the `run_pipeline*.sh` scripts](#locally-using-the--run-pipeline-sh--scripts)
+  * [Running a flex template from the Cloud Console](#running-a-flex-template-from-the-cloud-console)
+  * [Publishing a Pub/Sub message](#publishing-a-pub-sub-message)
   * [Pipeline types](#pipeline-types)
 - [Inputs](#inputs)
 - [Outputs](#outputs)
@@ -21,8 +24,14 @@ The new HTTP Archive data pipeline built entirely on GCP
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 
+
 ## Run the pipeline
-Dataflow jobs can be triggered locally using the `run_pipeline*.sh` scripts or using glex templates from the Cloud Console.
+Dataflow jobs can be triggered several ways:
+- Locally using bash scripts
+- From the Google Cloud Console
+- By publishing a Pub/Sub message
+
+### Locally using the `run_pipeline*.sh` scripts 
 
 ```shell
 # run the pipeline locally
@@ -34,11 +43,25 @@ Dataflow jobs can be triggered locally using the `run_pipeline*.sh` scripts or u
 ./run_flex_template combined [...]
 ```
 
+### Running a flex template from the Cloud Console
+
+**TODO: ADD DETAILS**
+
 Flex templates accept additional parameters as mentioned in the GCP documentation below, while custom parameters are defined in `flex_template_metadata_*.json`
 
 https://cloud.google.com/dataflow/docs/guides/templates/configuring-flex-templates#specify-options
 
 https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run-a-flex-template-pipeline
+
+
+### Publishing a Pub/Sub message
+
+Publishing a message containing the crawl's GCS path will trigger a GCP workflow.
+
+``` shell
+gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --message "gs://httparchive/crawls/android-Nov_1_2022"
+
+```
 
 
 ### Pipeline types
