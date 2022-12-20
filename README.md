@@ -31,7 +31,9 @@ Dataflow jobs can be triggered several ways:
 - From the Google Cloud Console
 - By publishing a Pub/Sub message
 
-### Locally using the `run_pipeline*.sh` scripts 
+### Locally using the `run_pipeline*.sh` scripts
+
+This method is best used when developing locally, as a convenience for running the pipeline's python scripts and GCP CLI commands.
 
 ```shell
 # run the pipeline locally
@@ -47,6 +49,8 @@ Dataflow jobs can be triggered several ways:
 
 **TODO: ADD DETAILS**
 
+This method is useful for running individual dataflow jobs from the web console since it does not require a development environment.
+
 Flex templates accept additional parameters as mentioned in the GCP documentation below, while custom parameters are defined in `flex_template_metadata_*.json`
 
 https://cloud.google.com/dataflow/docs/guides/templates/configuring-flex-templates#specify-options
@@ -55,6 +59,11 @@ https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run
 
 
 ### Publishing a Pub/Sub message
+
+This method is best used for serverlessly running the entire workflow, including logic to
+- block execution when the crawl is still running, by waiting for the crawl's Pub/Sub queue to drain
+- skip jobs where BigQuery tables have already been populated
+- automaticly retry failed jobs
 
 Publishing a message containing the crawl's GCS path will trigger a GCP workflow.
 
