@@ -9,6 +9,7 @@ The new HTTP Archive data pipeline built entirely on GCP
 - [Run the pipeline](#run-the-pipeline)
   * [Pipeline types](#pipeline-types)
 - [Inputs](#inputs)
+  * [Generating HAR manifest files](#generating-har-manifest-files)
 - [Outputs](#outputs)
 - [Temp table cleanup](#temp-table-cleanup)
 - [Known issues](#known-issues)
@@ -56,6 +57,23 @@ Summary and non-summary outputs can be controlled using the `--pipeline_type` ar
 ## Inputs
 
 This pipeline can read individual HAR files, or a single file containing a list of HAR file paths.
+
+### Generating HAR manifest files
+
+The pipeline can read a manifest file (text file containing GCS file paths separated by new lines for each HAR file). Follow the example to generate a manifest file:
+
+```shell
+# generate manifest files
+nohup gsutil ls gs://httparchive/crawls/chrome-Nov_1_2022 > chrome-Nov_1_2022.txt 2> chrome-Nov_1_2022.err &
+nohup gsutil ls gs://httparchive/crawls/android-Nov_1_2022 > android-Nov_1_2022.txt 2> android-Nov_1_2022.err &
+
+# watch for completion (i.e. file sizes will stop changing)
+#   if the err file increases in size, open and check for issues
+watch ls -l ./*Nov*
+
+# upload to GCS
+gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
+```
 
 ## Outputs
 
