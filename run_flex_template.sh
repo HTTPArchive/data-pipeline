@@ -19,10 +19,10 @@ case "${TYPE}~${TEMPLATE_PATH}" in
     *)
         echo "Expected an argumment of either [all|combined] and optionally TEMPLATE_PATH to be set (otherwise the latest template will be used)"
         echo "Examples"
-        echo "  $(basename $0) all ..."
-        echo "  $(basename $0) combined ..."
-        echo "  TEMPLATE_PATH=${TEMPLATE_BASE_PATH}/${REPO}-all-2022-10-12_00-19-44.json $(basename $0) all ..."
-        echo "  TEMPLATE_PATH=${TEMPLATE_BASE_PATH}/${REPO}-combined-2022-10-12_00-19-44.json $(basename $0) combined ..."
+        echo "  $(basename "$0") all ..."
+        echo "  $(basename "$0") combined ..."
+        echo "  TEMPLATE_PATH=${TEMPLATE_BASE_PATH}/${REPO}-all-2022-10-12_00-19-44.json $(basename "$0") all ..."
+        echo "  TEMPLATE_PATH=${TEMPLATE_BASE_PATH}/${REPO}-combined-2022-10-12_00-19-44.json $(basename "$0") combined ..."
         exit 1
         ;;
 esac
@@ -31,12 +31,12 @@ esac
 shift
 
 # find the latest template if unset
-: "${TEMPLATE_PATH:=$(gsutil ls ${TEMPLATE_BASE_PATH}/${REPO}-${TYPE}*.json | sort -r | head -n 1)}"
+: "${TEMPLATE_PATH:=$(gsutil ls ${TEMPLATE_BASE_PATH}/${REPO}-"${TYPE}"*.json | sort -r | head -n 1)}"
 
 set -u
 
-gcloud dataflow flex-template run ${DF_JOB_ID} \
+gcloud dataflow flex-template run "${DF_JOB_ID}" \
     --template-file-gcs-location="${TEMPLATE_PATH}" \
     --staging-location=${DF_TEMP_BUCKET} \
     --region=${REGION} \
-    $@
+    "$@"

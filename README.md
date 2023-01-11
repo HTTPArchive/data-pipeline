@@ -7,9 +7,9 @@ The new HTTP Archive data pipeline built entirely on GCP
 ![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wiki/HTTPArchive/data-pipeline/python-coverage-comment-action-badge.json)
 
 - [Run the pipeline](#run-the-pipeline)
-  * [Locally using the `run_pipeline*.sh` scripts](#locally-using-the--run-pipeline-sh--scripts)
+  * [Locally using the run_pipeline*.sh scripts](#locally-using-the-run_pipelinesh-scripts)
   * [Running a flex template from the Cloud Console](#running-a-flex-template-from-the-cloud-console)
-  * [Publishing a Pub/Sub message](#publishing-a-pub-sub-message)
+  * [Publishing a Pub/Sub message](#publishing-a-pubsub-message)
   * [Pipeline types](#pipeline-types)
 - [Inputs](#inputs)
   * [Generating HAR manifest files](#generating-har-manifest-files)
@@ -23,8 +23,6 @@ The new HTTP Archive data pipeline built entirely on GCP
   * [mimetypes and file extensions](#mimetypes-and-file-extensions)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
-
-
 
 ## Run the pipeline
 Dataflow jobs can be triggered several ways:

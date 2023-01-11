@@ -28,4 +28,4 @@ substitutions:
   _WORKER_TYPE: 'n1-standard-32'
 
 options:
-    dynamic_substitutions: true
+  dynamic_substitutions: true
