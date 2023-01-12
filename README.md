@@ -18,10 +18,11 @@ The new HTTP Archive data pipeline built entirely on GCP
 - [Inputs](#inputs)
   * [Generating HAR manifest files](#generating-har-manifest-files)
 - [Outputs](#outputs)
+- [Builds and Deployments](#builds-and-deployments)
 - [Known issues](#known-issues)
   * [Data Pipeline](#data-pipeline)
-- [Temp table cleanup](#temp-table-cleanup)
-- [Streaming pipeline](#streaming-pipeline)
+    + [Temp table cleanup](#temp-table-cleanup)
+    + [Streaming pipeline](#streaming-pipeline)
   * [Dataflow](#dataflow)
     + [Logging](#logging)
   * [Response cache-control max-age](#response-cache-control-max-age)
@@ -214,11 +215,20 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 - Dataflow temporary and staging artifacts in GCS
 - BigQuery (final landing zone)
 
+## Builds and Deployments
+
+The data pipeline uses Cloud Build to create Dataflow flex templates and upload them to Artifact Registry and Google Cloud Storage
+- Cloud Build [linked here](https://console.cloud.google.com/cloud-build/builds?project=httparchive)
+- Artifact Registry images [linked here](https://console.cloud.google.com/artifacts/docker/httparchive/us-west1/data-pipeline?project=httparchive)
+- Flex tempaltes in GCS [gs://httparchive/dataflow/templates](https://console.cloud.google.com/storage/browser/httparchive/dataflow/templates?project=httparchive)
+
+Dataflow flex templates are built using the `build_flex_template.sh` script. GCP Workflows must be udpated to the latest build tag manually to take effect in production.
+
 ## Known issues
 
 ### Data Pipeline
 
-## Temp table cleanup
+#### Temp table cleanup
 
 Since this pipeline uses the `FILE_LOADS` BigQuery insert method, failures will leave behind temporary tables.
 Use the saved query below and replace the dataset name as desired.
@@ -235,7 +245,7 @@ DO
 END FOR;
 ```
 
-## Streaming pipeline
+#### Streaming pipeline
 
 Initially this pipeline was developed to stream data into tables as individual HAR files became available in GCS from a live/running crawl. This allowed for results to be viewed faster, but came with additional burdens. For example:
 - Job failures and partial recovery/cleaning of tables.
