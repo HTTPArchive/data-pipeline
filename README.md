@@ -67,6 +67,49 @@ sequenceDiagram
     end
 ```
 
+### Development workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor developer
+    participant Local as Local Environment / IDE
+    participant Dataflow
+    participant Cloud Build
+
+    developer-->Local: create/update Dataflow code
+    developer-->Local: run Dataflow job with DirectRunner
+    developer-->Dataflow: run Dataflow job with DataflowRunner
+    developer-->Cloud Build: build flex template
+```
+
+### Manually running the pipeline
+
+```mermaid
+sequenceDiagram
+    actor developer
+    participant Local as Local Environment / IDE
+    participant Dataflow
+    participant PubSub
+    participant Workflows
+
+    alt run Dataflow job from local environment using the Dataflow runner
+        developer->>Local: clone repository and execute run_pipeline_*.sh
+    else run Dataflow job as a flex template
+        alt from local environment
+            developer->>Dataflow: clone repository and execute run_flex_template.sh
+        else from Google Cloud Console
+            developer->>Dataflow: use the Google Cloud Console to run a flex template as documented by GCP
+        end
+    else trigger a Google Workflows execution
+        alt
+            developer->>PubSub: create a new message containing a HAR manifest path from GCS
+        else
+            developer->>Workflows: rerun a previously failed Workflows execution
+        end
+    end
+```
+
 ## Run the pipeline
 Dataflow jobs can be triggered several ways:
 - Locally using bash scripts
