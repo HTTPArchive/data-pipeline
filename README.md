@@ -39,7 +39,7 @@ sequenceDiagram
     participant Cloud Build
     participant BigQuery
     participant Dataflow
-    
+
     PubSub->>Workflows: crawl-complete event
     loop until crawl queue is empty
         Workflows->>Monitoring: check crawl queue
