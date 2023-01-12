@@ -6,6 +6,8 @@ The new HTTP Archive data pipeline built entirely on GCP
 ![GitHub branch checks state](https://github.com/HTTPArchive/data-pipeline/actions/workflows/unittest.yml/badge.svg?branch=main)
 ![Coverage badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/wiki/HTTPArchive/data-pipeline/python-coverage-comment-action-badge.json)
 
+- [Diagrams](#diagrams)
+  * [GCP Workflows pipeline execution](#gcp-workflows-pipeline-execution)
 - [Run the pipeline](#run-the-pipeline)
   * [Locally using the run_pipeline*.sh scripts](#locally-using-the-run_pipelinesh-scripts)
   * [Running a flex template from the Cloud Console](#running-a-flex-template-from-the-cloud-console)
@@ -23,6 +25,47 @@ The new HTTP Archive data pipeline built entirely on GCP
   * [mimetypes and file extensions](#mimetypes-and-file-extensions)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+## Diagrams
+
+### GCP Workflows pipeline execution
+
+```mermaid
+sequenceDiagram
+    participant PubSub
+    participant Workflows
+    participant Monitoring
+    participant Cloud Storage
+    participant Cloud Build
+    participant BigQuery
+    participant Dataflow
+    
+    PubSub->>Workflows: crawl-complete event
+    loop until crawl queue is empty
+        Workflows->>Monitoring: check crawl queue
+    end
+    rect rgb(191, 223, 255)
+        Note right of Workflows: generate HAR manifest
+        break when manifest already exists
+            Workflows->>Cloud Storage: check if HAR manifest exists
+        end
+        Workflows->>Cloud Build: trigger job
+        Cloud Build->>Cloud Build: list HAR files and generate manifest file
+        Cloud Build->>Cloud Storage: upload HAR manifest to GCS
+    end
+    rect rgb(191, 223, 255)
+        Note right of Workflows: check BigQuery and run Dataflow jobs
+        break when BigQuery records exist for table and date
+            Workflows->>BigQuery: check all/combined tables for records in the given date
+        end
+        loop run jobs until retry limit is reached
+            Workflows->>Dataflow: run flex template
+            loop until job is complete
+                Workflows-->Dataflow: wait for job completion
+            end
+        end
+    end
+```
 
 ## Run the pipeline
 Dataflow jobs can be triggered several ways:
