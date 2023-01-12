@@ -8,16 +8,20 @@ The new HTTP Archive data pipeline built entirely on GCP
 
 - [Diagrams](#diagrams)
   * [GCP Workflows pipeline execution](#gcp-workflows-pipeline-execution)
+  * [Development workflow](#development-workflow)
+  * [Manually running the pipeline](#manually-running-the-pipeline)
 - [Run the pipeline](#run-the-pipeline)
-  * [Locally using the run_pipeline*.sh scripts](#locally-using-the-run_pipelinesh-scripts)
+  * [Locally using the `run_pipeline*.sh` scripts](#locally-using-the-run_pipelinesh-scripts)
   * [Running a flex template from the Cloud Console](#running-a-flex-template-from-the-cloud-console)
   * [Publishing a Pub/Sub message](#publishing-a-pubsub-message)
   * [Pipeline types](#pipeline-types)
 - [Inputs](#inputs)
   * [Generating HAR manifest files](#generating-har-manifest-files)
 - [Outputs](#outputs)
-- [Temp table cleanup](#temp-table-cleanup)
 - [Known issues](#known-issues)
+  * [Data Pipeline](#data-pipeline)
+- [Temp table cleanup](#temp-table-cleanup)
+- [Streaming pipeline](#streaming-pipeline)
   * [Dataflow](#dataflow)
     + [Logging](#logging)
   * [Response cache-control max-age](#response-cache-control-max-age)
@@ -76,11 +80,13 @@ sequenceDiagram
     participant Local as Local Environment / IDE
     participant Dataflow
     participant Cloud Build
+    participant Workflows
 
-    developer-->Local: create/update Dataflow code
-    developer-->Local: run Dataflow job with DirectRunner
-    developer-->Dataflow: run Dataflow job with DataflowRunner
-    developer-->Cloud Build: build flex template
+    developer->>Local: create/update Dataflow code
+    developer->>Local: run Dataflow job with DirectRunner via run_*.py
+    developer->>Dataflow: run Dataflow job with DataflowRunner via run_pipeline_*.sh
+    developer->>Cloud Build: run build_flex_template.sh
+    developer->>Workflows: update flexTemplateBuildTag
 ```
 
 ### Manually running the pipeline
@@ -208,6 +214,10 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 - Dataflow temporary and staging artifacts in GCS
 - BigQuery (final landing zone)
 
+## Known issues
+
+### Data Pipeline
+
 ## Temp table cleanup
 
 Since this pipeline uses the `FILE_LOADS` BigQuery insert method, failures will leave behind temporary tables.
@@ -225,7 +235,12 @@ DO
 END FOR;
 ```
 
-## Known issues
+## Streaming pipeline
+
+Initially this pipeline was developed to stream data into tables as individual HAR files became available in GCS from a live/running crawl. This allowed for results to be viewed faster, but came with additional burdens. For example:
+- Job failures and partial recovery/cleaning of tables.
+- Partial table population mid-crawl led to consumer confusion since they were previously accustomed to full tables being available.
+- Dataflow API for streaming inserts burried some low-level configuration leading to errors which were opaque and difficult to troubleshoot.
 
 ### Dataflow
 
