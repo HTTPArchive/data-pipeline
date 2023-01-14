@@ -1,0 +1,471 @@
+# name="data-pipeline"
+# description="Runs the HTTPArchive data pipeline"
+
+main:
+    params: [event]
+    steps:        
+        - logParams:
+            call: sys.log
+            args:
+                data: ${event}
+                severity: DEBUG
+
+        - getEventData:
+            call: decodePubSubEventData
+            args:
+                event: ${event}
+            result: crawlPath
+
+        - init:
+            assign:
+                - jobTypes: ["all", "combined"]
+                - checkIntervalSeconds: 300
+                - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+                - region: "us-west1"
+                - flexTemplateRepo: "data-pipeline"
+                - flexTemplateBuildTag: "2023-01-04_21-51-19"
+                - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
+                - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
+                - manifestFileName: ${text.find_all_regex(crawlPath, "[^/]*$")[0].match + ".txt"}
+                - manifestPath: ${"gs://httparchive/crawls_manifest/" + manifestFileName}
+                - client: ${text.split(manifestFileName, "-")[0]}
+                - crawlDate: ${text.split(text.split(manifestFileName, "-")[1], ".")[0]}
+
+        - resolveClientName:
+            switch:
+                - condition: ${client == "chrome"}
+                  assign:
+                    - client: "desktop"
+                - condition: ${client == "android"}
+                  assign:
+                    - client: "mobile"
+                - condition: true
+                  raise: ${"Unrecognized client, " + client}
+
+        - setStartEndTimes:
+            assign:
+                - now: ${sys.now()}
+                - startTime: ${time.format(now - checkIntervalSeconds)}
+                - endTime: ${time.format(now)}
+                # for testing
+                # - startTime: "2022-09-07T23:30:00Z"
+                # - startTime: "2022-10-08T12:29:00Z"
+                # - endTime: ${time.format(time.parse(startTime) + checkIntervalSeconds)}
+        
+        # wait for the webpagetest crawl queue to drain
+        - waitForWebPageTestCompletion:
+            call: waitForEmptyQueue
+            args:
+                startTime: ${startTime}
+                endTime: ${endTime}
+                checkIntervalSeconds: ${checkIntervalSeconds}
+
+        # generate a manifest file in GCS if it does not exist, otherwise continue
+        - generateManifest:
+            call: generateManifest
+            args:
+                crawlPath: ${crawlPath}
+                manifestPath: ${manifestPath}
+                manifestFileName: ${manifestFileName}
+
+        - runDataflowJobs:
+            call: runDataflowJobs
+            args:
+                jobTypes: ${jobTypes}
+                client: ${client}
+                crawlDate: ${crawlDate}
+                startTime: ${startTime}
+                manifestPath: ${manifestPath}
+                flexTemplateTemp: ${flexTemplateTemp}
+                flexTemplateBasePath: ${flexTemplateBasePath}
+                flexTemplateBuildTag: ${flexTemplateBuildTag}
+                project: ${project}
+                region: ${region}
+                checkIntervalSeconds: ${checkIntervalSeconds}
+
+        # TODO: implement this
+        # - generateReports:
+        #     call: sys.log
+        #     args:
+        #         data: "generating reports"
+        #         severity: INFO
+
+### SUB-TASKS ###
+
+decodePubSubEventData:
+    params: [event]
+    steps:
+    - decode_pubsub_message:
+        assign:
+           - base64: ${base64.decode(event.data.message.data)}
+           - message: ${text.decode(base64)}
+    - return_pubsub_message:
+        return: ${message}
+
+generateManifest:
+    params: [crawlPath, manifestPath, manifestFileName]
+    steps:
+        - checkManifestPath:
+            call: googleapis.storage.v1.objects.list
+            args:
+                bucket: httparchive
+                prefix: ${text.replace_all(manifestPath, "gs://httparchive/", "")}
+            result: manifestPathResults
+        - logManifestPath:
+            call: sys.log
+            args:
+                data: ${manifestPathResults}
+                severity: DEBUG
+        - manifestExists:
+            switch:
+            - condition: ${"items" in manifestPathResults}
+              next: end
+            next: createManifestFile
+        - createManifestFile:
+            call: googleapis.cloudbuild.v1.projects.builds.create
+            args:
+                projectId: httparchive
+                body:
+                    steps:
+                        - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+                          id: list-files
+                          # timeout in seconds for this build step
+                          timeout: ${string(3 * 60 * 60) + "s"}
+                          script: ${
+                              "#!/usr/bin/env bash" +
+                              "\necho listing files from " + crawlPath +
+                              "\ngsutil ls " + crawlPath + " > /workspace/" + manifestFileName +
+                              "\nwc -l /workspace/" + manifestFileName + " > $BUILDER_OUTPUT/output" +
+                              "\ncat $BUILDER_OUTPUT/output"
+                              }
+                    artifacts:
+                        objects:
+                            location: ${text.replace_all(manifestPath, manifestFileName, "")}
+                            paths:
+                                - ${manifestFileName}
+                    tags:
+                        - ${"workflow_id_" + sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
+                        - ${"workflow_execution_id_" + sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+                        - ${"workflow_revision_id_" + sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                    timeout: ${string(4 * 60 * 60) + "s"}
+                connector_params:
+                    # timeout in seconds for the entire build
+                    timeout: ${4 * 60 * 60}
+            result: buildOperation
+        - logBuildOperation:
+            call: sys.log
+            args:
+                data: ${buildOperation}
+                severity: DEBUG
+
+bigQueryCountAll:
+    params: [project, client, crawlDate]
+    steps:
+        - logIntent:
+            call: sys.log
+            args:
+                data: ${"Checking BigQuery for all," + client + "," + crawlDate}
+                severity: INFO
+        - query:
+            call: googleapis.bigquery.v2.jobs.query
+            args:
+                projectId: ${project}
+                body:
+                    useLegacySql: false
+                    useQueryCache: false
+                    timeoutMs: 30000
+                    labels:
+                        workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
+                        workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+                        workflow_revision_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                    query: ${
+                        "SELECT COUNT(1)
+                        FROM `httparchive.all.pages`
+                        WHERE client = '"+ client +"' and date = PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')"
+                        }
+            result: queryResult
+        - logResult:
+            call: sys.log
+            args:
+                data: ${queryResult}
+                severity: DEBUG
+        - returnResult:
+            switch:
+                - condition: ${"rows" in queryResult}
+                  return: ${int(queryResult.rows[0].f[0].v)}
+            next: returnZero
+        - returnZero:
+            return: 0
+
+bigQueryCountCombined:
+    params: [project, client, crawlDate]
+    steps:
+        - logIntent:
+            call: sys.log
+            args:
+                data: ${"Checking BigQuery for combined," + client + "," + crawlDate}
+                severity: INFO
+        - query:
+            call: googleapis.bigquery.v2.jobs.query
+            args:
+                projectId: ${project}
+                body:
+                    useLegacySql: false
+                    useQueryCache: false
+                    timeoutMs: 30000
+                    labels:
+                        workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
+                        workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+                        workflow_revision_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                    query: ${
+                        "SELECT row_count
+                        FROM `httparchive.pages.__TABLES__`
+                        WHERE table_id = CONCAT(FORMAT_DATE('%Y_%m_%d', PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')), '_" + client + "')"
+                        }
+            result: queryResult
+        - logResult:
+            call: sys.log
+            args:
+                data: ${queryResult}
+                severity: DEBUG
+        - returnResult:
+            switch:
+                - condition: ${"rows" in queryResult}
+                  return: ${int(queryResult.rows[0].f[0].v)}
+            next: returnZero
+        - returnZero:
+            return: 0
+
+runDataflowJobs:
+    params: [jobTypes, client, crawlDate, startTime, manifestPath, flexTemplateTemp, flexTemplateBasePath, flexTemplateBuildTag, project, region, checkIntervalSeconds]
+    steps:
+        - iterateJobTypes:
+            for:
+                value: jobType
+                in: ${jobTypes}
+                steps:
+                    - checkBigQuery:
+                        switch:
+                            - condition: ${jobType == "all"}
+                              call: bigQueryCountAll
+                              args:
+                                project: ${project}
+                                client: ${client}
+                                crawlDate: ${crawlDate}
+                              result: bqCount
+                            - condition: ${jobType == "combined"}
+                              call: bigQueryCountCombined
+                              args:
+                                project: ${project}
+                                client: ${client}
+                                crawlDate: ${crawlDate}
+                              result: bqCount
+                    - startOrContinue:
+                        switch:
+                            - condition: ${bqCount > 0}
+                              call: sys.log
+                              args:
+                                data: ${"Skipping `" + jobType + "` dataflow job for `" + client + "`, data already exists. Row count=" + bqCount}
+                                severity: WARNING
+                              next: continue
+                        next: startJob
+                    - startJob:
+                        try:
+                            steps:
+                                - setJobName:
+                                    assign:
+                                        - jobName: '${text.to_lower("crawl-" + jobType + "-" + client + "-" + text.replace_all_regex(text.replace_all_regex(startTime, "[-:]", ""), "[T.]", "-"))}'            
+                                - logStartJob:
+                                    call: sys.log
+                                    args:
+                                        data: ${"Running Dataflow job:" + jobName}
+                                        severity: INFO
+                                - launchDataflowFlexTemplate:
+                                    call: launchDataflowFlexTemplate
+                                    args:
+                                        project: ${project}
+                                        region: ${region}
+                                        jobType: ${jobType}
+                                        jobName: ${jobName}
+                                        flexTemplateTemp: ${flexTemplateTemp}
+                                        flexTemplateBasePath: ${flexTemplateBasePath}
+                                        flexTemplateBuildTag: ${flexTemplateBuildTag}
+                                        client: ${client}
+                                        crawlDate: ${crawlDate}
+                                        parameters:
+                                            "input_file": ${manifestPath}
+                                    result: jobId
+                                - waitForDataflowCompletion:
+                                    call: waitForDataflowCompletion
+                                    args:
+                                        project: ${project}
+                                        region: ${region}
+                                        jobId: ${jobId}
+                                        status: "JOB_STATE_DONE"
+                                        checkIntervalSeconds: ${checkIntervalSeconds}
+                        retry:
+                            predicate: ${dataflowJobRetryPredicate}
+                            max_retries: 2
+                            backoff:
+                                initial_delay: 5
+                                max_delay: 5
+                                multiplier: 1
+
+# https://dev.to/stack-labs/orchestrate-dataflow-pipelines-easily-with-gcp-workflows-1i8k
+waitForDataflowCompletion:
+    params: [project, region, jobId, status, checkIntervalSeconds]
+    steps:
+        - init:
+            assign:
+                - currentStatus: ""
+                - failureStatuses: ["JOB_STATE_FAILED", "JOB_STATE_CANCELLED", "JOB_STATE_UPDATED", "JOB_STATE_DRAINED"]
+        - check_condition:
+            switch:
+            - condition: ${currentStatus in failureStatuses}
+              next: exit_fail
+            - condition: ${currentStatus != status}
+              next: iterate
+            next: exit_success
+        - iterate:
+            steps:
+            - sleep30s:
+                call: sys.sleep
+                args:
+                    seconds: ${checkIntervalSeconds}
+            - getJob:
+                call: googleapis.dataflow.v1b3.projects.locations.jobs.get
+                args:
+                    jobId: ${jobId}
+                    location: ${region}
+                    projectId: ${project}
+                result: getJobResponse
+            - getStatus:
+                assign:
+                    - currentStatus: ${getJobResponse.currentState}
+            - log:
+                call: sys.log
+                args:
+                    text: ${"Current Dataflow job status="+currentStatus}
+                    severity: DEBUG
+            next: check_condition
+        - exit_success:
+            return: ${currentStatus}
+        - exit_fail:
+            raise: ${"Job in unexpected terminal status "+currentStatus}
+
+launchDataflowFlexTemplate:
+  params: [project, region, jobType, jobName, flexTemplateTemp, flexTemplateBasePath, flexTemplateBuildTag, client, crawlDate, parameters]
+  steps:
+    - logit:
+        call: sys.log
+        args:
+            data: ${parameters}
+            severity: DEBUG
+    - launch:
+        call: googleapis.dataflow.v1b3.projects.locations.flexTemplates.launch
+        args:
+            location: ${region}
+            projectId: ${project}
+            body:
+                launchParameter:
+                    jobName: ${jobName}
+                    environment:
+                        stagingLocation: ${flexTemplateTemp}
+                        tempLocation: ${flexTemplateTemp}
+                        # maxWorkers: 10
+                        additionalUserLabels:
+                            workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
+                            workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+                            workflow_revision_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                            client: ${client}
+                            crawl_date: ${text.to_lower(crawlDate)}
+                            job_type: ${jobType}
+                    containerSpecGcsPath: ${flexTemplateBasePath + "-" + jobType + "-" + flexTemplateBuildTag + ".json"}
+                    parameters: ${parameters}
+        result: launchResult
+    - logResult:
+            call: sys.log
+            args:
+                data: ${launchResult}
+                severity: DEBUG
+    - jobCreated:
+        return: ${launchResult.job.id}
+
+waitForEmptyQueue:
+    params: [startTime, endTime, checkIntervalSeconds]
+    steps:
+        - checkQueue:
+            call: checkQueue
+            args:
+                startTime: ${startTime}
+                endTime: ${endTime}
+                alignmentPeriod: ${checkIntervalSeconds}
+            result: queueSize
+        - logQueueSize:
+            call: sys.log
+            args:
+                data: ${"startTime:" + startTime + ",endTime:" + endTime + ",queueSize:" + queueSize}
+                severity: DEBUG
+        - queueIsEmpty:
+            switch:
+                - condition: ${queueSize > 0}
+                  next: wait
+            next: end
+        - wait:
+            call: sys.sleep_until
+            args:
+                time: ${time.format(time.parse(endTime) + checkIntervalSeconds)}
+        - setNextInterval:
+            assign:
+                # TODO: use explicit times, or always reset to the current time to avoid lag between loops (for very small intervals)?
+                # - startTime: ${time.format(sys.now() - checkIntervalSeconds)}
+                # - endTime: ${time.format(sys.now())}
+                - startTime: ${endTime}
+                - endTime: ${time.format(time.parse(endTime) + checkIntervalSeconds)}
+            next: checkQueue
+
+checkQueue:
+    params: [startTime, endTime, alignmentPeriod]
+    steps:
+        - init:
+            assign:
+                - projectId: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+                - topicId: "crawl-queue"
+                - subscriptionId: "crawl-queue"
+        - getMetricValue:
+            call: http.get
+            args:
+                url: ${"https://monitoring.googleapis.com/v3/projects/" + projectId + "/timeSeries"}
+                query:
+                    aggregation.alignmentPeriod: ${alignmentPeriod + "s"}
+                    aggregation.groupByFields: subscriptionId
+                    aggregation.perSeriesAligner: "ALIGN_MIN"
+                    filter: ${"metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND metadata.system_labels.topic_id=\"" + topicId + "\" AND resource.labels.subscription_id=\"" + subscriptionId + "\""}
+                    interval.endTime: ${endTime}
+                    interval.startTime: ${startTime}
+                auth:
+                    type: OAuth2
+            result: metricValue
+        - logMetricValue:
+            call: sys.log
+            args:
+                data: ${metricValue}
+                severity: DEBUG
+        - returnResult:
+            return: ${int(metricValue.body.timeSeries[0].points[0].value.int64Value)}
+
+dataflowJobRetryPredicate:
+    params: [e]
+    steps:
+        - logErrorMessage:
+            call: sys.log
+            args:
+                data: ${"Dataflow workflow step failure"}
+                severity: ERROR
+        - logException:
+            call: sys.log
+            args:
+                data: ${e}
+                severity: ERROR
+        - returnTrue:
+            return: true

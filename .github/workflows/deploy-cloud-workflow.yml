@@ -1,0 +1,26 @@
+name: Deploy Cloud Workflow
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    name: Deploy Cloud Workflow
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@master
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
+    - name: gcloud workflows deploy
+      run: |
+        gcloud workflows deploy data-pipeline \
+        --location us-west1 \
+        --source data-pipeline.workflows.yaml \
+        --project ${{ secrets.GCP_PROJECT_ID }} \
+        --description "Runs the HTTPArchive data pipeline" \
+        --labels "commit-sha=${{ github.sha }}" \
+        --service-account github-actions@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
