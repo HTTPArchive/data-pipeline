@@ -477,6 +477,7 @@ checkQueue:
                       aggregation.alignmentPeriod: ${alignmentPeriod + "s"}
                       aggregation.groupByFields: subscriptionId
                       aggregation.perSeriesAligner: "ALIGN_MIN"
+                      # yamllint disable-line rule:line-length
                       filter: ${"metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND metadata.system_labels.topic_id=\"" + topicId + "\" AND resource.labels.subscription_id=\"" + subscriptionId + "\""}
                       interval.endTime: ${endTime}
                       interval.startTime: ${startTime}
