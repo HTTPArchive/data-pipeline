@@ -448,7 +448,7 @@ waitForEmptyQueue:
                   time: ${time.format(time.parse(endTime) + checkIntervalSeconds)}
         - setNextInterval:
               assign:
-                  # TODO: use explicit times, 
+                  # TODO: use explicit times,
                   #   or always reset to the current time to avoid lag between loops (for very small intervals)?
                   # - startTime: ${time.format(sys.now() - checkIntervalSeconds)}
                   # - endTime: ${time.format(sys.now())}
