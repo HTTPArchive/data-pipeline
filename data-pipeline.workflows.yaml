@@ -217,11 +217,13 @@ bigQueryCountCombined:
                           workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
                           workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
                           workflow_revision_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                      # yamllint disable rule:line-length
                       query: ${
                           "SELECT row_count
                           FROM `httparchive.pages.__TABLES__`
-                          WHERE table_id = CONCAT(FORMAT_DATE('%Y_%m_%d', PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')), '_" + client + "')" # yamllint disable-line
+                          WHERE table_id = CONCAT(FORMAT_DATE('%Y_%m_%d', PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')), '_" + client + "')"
                           }
+                      # yamllint enable rule:line-length
               result: queryResult
         - logResult:
               call: sys.log
@@ -278,7 +280,8 @@ runDataflowJobs:
                                 - condition: ${bqCount > 0}
                                   call: sys.log
                                   args:
-                                      data: ${"Skipping `" + jobType + "` dataflow job for `" + client + "`, data already exists. Row count=" + bqCount}  # yamllint disable-line
+                                      # yamllint disable-line rule:line-length
+                                      data: ${"Skipping `" + jobType + "` dataflow job for `" + client + "`, data already exists. Row count=" + bqCount}
                                       severity: WARNING
                                   next: continue
                             next: startJob
@@ -287,7 +290,8 @@ runDataflowJobs:
                                 steps:
                                     - setJobName:
                                           assign:
-                                              - jobName: '${text.to_lower("crawl-" + jobType + "-" + client + "-" + text.replace_all_regex(text.replace_all_regex(startTime, "[-:]", ""), "[T.]", "-"))}'  # yamllint disable-line
+                                              # yamllint disable-line rule:line-length
+                                              - jobName: '${text.to_lower("crawl-" + jobType + "-" + client + "-" + text.replace_all_regex(text.replace_all_regex(startTime, "[-:]", ""), "[T.]", "-"))}'
                                     - logStartJob:
                                           call: sys.log
                                           args:
@@ -411,7 +415,8 @@ launchDataflowFlexTemplate:
                                   client: ${client}
                                   crawl_date: ${text.to_lower(crawlDate)}
                                   job_type: ${jobType}
-                          containerSpecGcsPath: ${flexTemplateBasePath + "-" + jobType + "-" + flexTemplateBuildTag + ".json"}  # yamllint disable-line
+                          # yamllint disable-line rule:line-length
+                          containerSpecGcsPath: ${flexTemplateBasePath + "-" + jobType + "-" + flexTemplateBuildTag + ".json"}
                           parameters: ${parameters}
               result: launchResult
         - logResult:
