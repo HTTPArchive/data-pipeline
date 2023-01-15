@@ -220,7 +220,7 @@ bigQueryCountCombined:
                       query: ${
                           "SELECT row_count
                           FROM `httparchive.pages.__TABLES__`
-                          WHERE table_id = CONCAT(FORMAT_DATE('%Y_%m_%d', PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')), '_" + client + "')"
+                          WHERE table_id = CONCAT(FORMAT_DATE('%Y_%m_%d', PARSE_DATE('%b_%e_%Y', '" + crawlDate + "')), '_" + client + "')" # yamllint disable-line
                           }
               result: queryResult
         - logResult:
@@ -278,7 +278,7 @@ runDataflowJobs:
                                 - condition: ${bqCount > 0}
                                   call: sys.log
                                   args:
-                                      data: ${"Skipping `" + jobType + "` dataflow job for `" + client + "`, data already exists. Row count=" + bqCount}
+                                      data: ${"Skipping `" + jobType + "` dataflow job for `" + client + "`, data already exists. Row count=" + bqCount}  # yamllint disable-line
                                       severity: WARNING
                                   next: continue
                             next: startJob
@@ -287,7 +287,7 @@ runDataflowJobs:
                                 steps:
                                     - setJobName:
                                           assign:
-                                              - jobName: '${text.to_lower("crawl-" + jobType + "-" + client + "-" + text.replace_all_regex(text.replace_all_regex(startTime, "[-:]", ""), "[T.]", "-"))}'
+                                              - jobName: '${text.to_lower("crawl-" + jobType + "-" + client + "-" + text.replace_all_regex(text.replace_all_regex(startTime, "[-:]", ""), "[T.]", "-"))}'  # yamllint disable-line
                                     - logStartJob:
                                           call: sys.log
                                           args:
@@ -411,7 +411,7 @@ launchDataflowFlexTemplate:
                                   client: ${client}
                                   crawl_date: ${text.to_lower(crawlDate)}
                                   job_type: ${jobType}
-                          containerSpecGcsPath: ${flexTemplateBasePath + "-" + jobType + "-" + flexTemplateBuildTag + ".json"}
+                          containerSpecGcsPath: ${flexTemplateBasePath + "-" + jobType + "-" + flexTemplateBuildTag + ".json"}  # yamllint disable-line
                           parameters: ${parameters}
               result: launchResult
         - logResult:
@@ -448,7 +448,8 @@ waitForEmptyQueue:
                   time: ${time.format(time.parse(endTime) + checkIntervalSeconds)}
         - setNextInterval:
               assign:
-                  # TODO: use explicit times, or always reset to the current time to avoid lag between loops (for very small intervals)?
+                  # TODO: use explicit times, 
+                  #   or always reset to the current time to avoid lag between loops (for very small intervals)?
                   # - startTime: ${time.format(sys.now() - checkIntervalSeconds)}
                   # - endTime: ${time.format(sys.now())}
                   - startTime: ${endTime}
@@ -471,7 +472,11 @@ checkQueue:
                       aggregation.alignmentPeriod: ${alignmentPeriod + "s"}
                       aggregation.groupByFields: subscriptionId
                       aggregation.perSeriesAligner: "ALIGN_MIN"
-                      filter: ${"metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND metadata.system_labels.topic_id=\"" + topicId + "\" AND resource.labels.subscription_id=\"" + subscriptionId + "\""}
+                      filter: ${
+                        "metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\"" +
+                        " AND metadata.system_labels.topic_id=\"" + topicId + "\"" +
+                        " AND resource.labels.subscription_id=\"" + subscriptionId + "\""
+                        }
                       interval.endTime: ${endTime}
                       interval.startTime: ${startTime}
                   auth:
