@@ -11,7 +11,7 @@ steps:
     - '${_TEMPLATE_PATH}'
     - '--sdk-language=PYTHON'
     - '--image=${_TEMPLATE_IMAGE}'
-    - '--additional-user-labels=template-name=${_PIPELINE_NAME},template-version=${_BUILD_TAG}'
+    - '--additional-user-labels=template_name=${_PIPELINE_NAME},template_version=${_BUILD_TAG}'
     - '--metadata-file=${_TEMPLATE_METADATA}'
     - '--worker-machine-type=${_WORKER_TYPE}'
     - '--worker-region=${_REGION}'
