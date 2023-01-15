@@ -10,4 +10,4 @@ do
     gcloud builds submit --substitutions=_TYPE="${type}",_BUILD_TAG="${BUILD_TAG}" .
 done
 
-echo ${BUILD_TAG}
+echo "${BUILD_TAG}"
