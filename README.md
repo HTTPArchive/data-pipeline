@@ -123,7 +123,7 @@ Dataflow jobs can be triggered several ways:
 - From the Google Cloud Console
 - By publishing a Pub/Sub message
 
-### Locally using the `run_pipeline*.sh` scripts
+### Locally using the `run_*.sh` scripts
 
 This method is best used when developing locally, as a convenience for running the pipeline's python scripts and GCP CLI commands.
 
@@ -220,9 +220,9 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 The data pipeline uses Cloud Build to create Dataflow flex templates and upload them to Artifact Registry and Google Cloud Storage
 - Cloud Build [linked here](https://console.cloud.google.com/cloud-build/builds?project=httparchive)
 - Artifact Registry images [linked here](https://console.cloud.google.com/artifacts/docker/httparchive/us-west1/data-pipeline?project=httparchive)
-- Flex tempaltes in GCS [gs://httparchive/dataflow/templates](https://console.cloud.google.com/storage/browser/httparchive/dataflow/templates?project=httparchive)
+- Flex templates in GCS [gs://httparchive/dataflow/templates](https://console.cloud.google.com/storage/browser/httparchive/dataflow/templates?project=httparchive)
 
-Dataflow flex templates are built using the `build_flex_template.sh` script. GCP Workflows must be udpated to the latest build tag manually to take effect in production.
+Dataflow flex templates are built using the `build_flex_template.sh` script. GCP Workflows must be updated to the latest build tag manually to take effect in production.
 
 ## Known issues
 
