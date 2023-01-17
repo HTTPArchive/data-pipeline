@@ -157,7 +157,7 @@ https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run
 This method is best used for serverlessly running the entire workflow, including logic to
 - block execution when the crawl is still running, by waiting for the crawl's Pub/Sub queue to drain
 - skip jobs where BigQuery tables have already been populated
-- automaticly retry failed jobs
+- automatically retry failed jobs
 
 Publishing a message containing the crawl's GCS path will trigger a GCP workflow.
 
@@ -221,7 +221,7 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 
 [GitHub actions](.github/workflows/) are used to automate the build and deployment of Google Cloud Workflows and Dataflow Flex Templates. Actions are triggered on merges to the `main` branch, for specific files, and when other related GitHub actions have completed successfully.
 
-- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipleine are updated (e.g. python, Dockerfile, flex template metadata)
+- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata)
 - [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully
 
 ### Build inputs and artifacts
