@@ -11,7 +11,7 @@ The new HTTP Archive data pipeline built entirely on GCP
   * [Development workflow](#development-workflow)
   * [Manually running the pipeline](#manually-running-the-pipeline)
 - [Run the pipeline](#run-the-pipeline)
-  * [Locally using the `run_pipeline*.sh` scripts](#locally-using-the-run_pipelinesh-scripts)
+  * [Locally using the `run_*.sh` scripts](#locally-using-the-run_sh-scripts)
   * [Running a flex template from the Cloud Console](#running-a-flex-template-from-the-cloud-console)
   * [Publishing a Pub/Sub message](#publishing-a-pubsub-message)
   * [Pipeline types](#pipeline-types)
@@ -19,6 +19,8 @@ The new HTTP Archive data pipeline built entirely on GCP
   * [Generating HAR manifest files](#generating-har-manifest-files)
 - [Outputs](#outputs)
 - [Builds and Deployments](#builds-and-deployments)
+  * [Build inputs and artifacts](#build-inputs-and-artifacts)
+  * [To build and deploy manually](#to-build-and-deploy-manually)
 - [Known issues](#known-issues)
   * [Data Pipeline](#data-pipeline)
     + [Temp table cleanup](#temp-table-cleanup)
@@ -217,12 +219,74 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 
 ## Builds and Deployments
 
-The data pipeline uses Cloud Build to create Dataflow flex templates and upload them to Artifact Registry and Google Cloud Storage
+[GitHub actions](.github/workflows/) are used to automate the build and deployment of Google Cloud Workflows and Dataflow Flex Templates. Actions are triggered on merges to the `main` branch, for specific files, and when other related GitHub actions have completed successfully.
+
+- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipleine are updated (e.g. python, Dockerfile, flex template metadata)
+- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully
+
+### Build inputs and artifacts
+
+GCP's documentation for creating and building Flex Templates are [linked here](https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#create_and_build_a_container_image)
+
+The following files are used for building and deploying Dataflow Flex Templates:
+- [.gcloudignore](.gcloudignore) excludes files from uploading to GCS for Cloud Build
+- [build_flex_template.sh](build_flex_template.sh) a helper script to initiate the Cloud Build
+- [cloudbuild.yaml](cloudbuild.yaml) is the configuration file for Cloud Build to create containers and template files in GCS (artifacts listed further below)
+- [Dockerfile](Dockerfile) used to create the job graph and start the Dataflow job
+- [flex_template_metadata_all.json](flex_template_metadata_all.json) and [flex_template_metadata_combined.json](flex_template_metadata_combined.json) define custom parameters to be validated when the template is run
+- [run_flex_template.sh](run_flex_template.sh) a helper script to run a Flex Template pipeline
+
+[Cloud Build](cloudbuild.yaml) is used to create Dataflow flex templates and upload them to Artifact Registry and Google Cloud Storage
 - Cloud Build [linked here](https://console.cloud.google.com/cloud-build/builds?project=httparchive)
 - Artifact Registry images [linked here](https://console.cloud.google.com/artifacts/docker/httparchive/us-west1/data-pipeline?project=httparchive)
 - Flex templates in GCS [gs://httparchive/dataflow/templates](https://console.cloud.google.com/storage/browser/httparchive/dataflow/templates?project=httparchive)
 
-Dataflow flex templates are built using the `build_flex_template.sh` script. GCP Workflows must be updated to the latest build tag manually to take effect in production.
+### To build and deploy manually
+
+The GitHub Actions can be triggered manually from the repository by following the documentation here for [Manually running a workflow](https://docs.github.com/en/actions/managing-workflow-runs/manually-running-a-workflow).
+
+```mermaid
+flowchart LR
+    Start((Start))
+    End((End))
+    A{Updating Dataflow?}
+    B[Run 'Deploy Dataflow Flex Template']
+    DDFTA[['Deploy Dataflow Flex Template' executes]]
+    C{Updating Cloud Workflows?}
+    D[Run 'Deploy Cloud Workflow']
+    DCWA[['Deploy Cloud Workflow' executes]]
+
+    Start --> A
+    Start --> C
+    A --> B
+    B -->DDFTA
+    DDFTA -->|automatically triggers| DCWA
+    C --> D
+    D --> DCWA
+    DCWA --> End
+```
+
+Alternatively, a combination of bash scripts and the Google Cloud Console can be used to manually deploy Cloud Workflows and Dataflow Flex Templates.
+
+```mermaid
+flowchart LR
+    Start((Start))
+    End((End))
+    A{Updating Dataflow?}
+    B[Run build_flex_template.sh]
+    C{Updating Cloud Workflows?}
+    D[Note the latest build tag from the script output]
+    E[Update the 'data-pipeline' workflow via the Cloud Console]
+
+    Start --> A
+    Start --> C
+    A -->|Yes| B
+    A -->|No| C
+    B --> D
+    D --> E
+    C -->|Yes| E
+    E --> End
+```
 
 ## Known issues
 
