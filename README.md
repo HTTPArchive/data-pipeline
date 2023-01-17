@@ -141,8 +141,6 @@ This method is best used when developing locally, as a convenience for running t
 
 ### Running a flex template from the Cloud Console
 
-**TODO: ADD DETAILS**
-
 This method is useful for running individual dataflow jobs from the web console since it does not require a development environment.
 
 Flex templates accept additional parameters as mentioned in the GCP documentation below, while custom parameters are defined in `flex_template_metadata_*.json`
@@ -151,6 +149,18 @@ https://cloud.google.com/dataflow/docs/guides/templates/configuring-flex-templat
 
 https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run-a-flex-template-pipeline
 
+Steps:
+1. Locate the desired build tag (e.g. see `flexTemplateBuildTag` in the [data-pipeline.workflows.yaml](data-pipeline.workflows.yaml))
+2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
+3. Click "CREATE JOB FROM TEMPLATE"
+4. Provide a "Job name"
+5. Pick a region with enough Compute quota (e.g. us-west1)
+6. Choose "Custom Template"
+7. Browse to the template directory (e.g. `gs://httparchive/dataflow/templates`)
+8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-all-2023-01-04_21-51-19.json`)
+9. Click "SHOW OPTIONAL PARAMETERS" and provide an input for the "GCS input path" (path of HAR files) or "GCS input file" (path of HAR manifest)
+10. (Optional) provide values for any additional parameters
+11. Click "RUN JOB"
 
 ### Publishing a Pub/Sub message
 
