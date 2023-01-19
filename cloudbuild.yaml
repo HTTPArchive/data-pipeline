@@ -1,0 +1,31 @@
+steps:
+- id: 'build_image'
+  name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', '${_TEMPLATE_IMAGE}', '--build-arg=TYPE=${_TYPE}', '.']
+- id: 'build_template'
+  name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    - 'dataflow'
+    - 'flex-template'
+    - 'build'
+    - '${_TEMPLATE_PATH}'
+    - '--sdk-language=PYTHON'
+    - '--image=${_TEMPLATE_IMAGE}'
+    - '--additional-user-labels=template_name=${_PIPELINE_NAME},template_version=${_BUILD_TAG}'
+    - '--metadata-file=${_TEMPLATE_METADATA}'
+    - '--worker-machine-type=${_WORKER_TYPE}'
+    - '--worker-region=${_REGION}'
+
+images: ['${_TEMPLATE_IMAGE}']
+
+substitutions:
+  _REGION: 'us-west1'
+  _REPO: 'data-pipeline'
+  _PIPELINE_NAME: '${_REPO}-${_TYPE}'
+  _TEMPLATE_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_PIPELINE_NAME}:${_BUILD_TAG}'
+  _TEMPLATE_PATH: 'gs://${PROJECT_ID}/dataflow/templates/${_PIPELINE_NAME}-${_BUILD_TAG}.json'
+  _TEMPLATE_METADATA: 'flex_template_metadata_${_TYPE}.json'
+  _WORKER_TYPE: 'n1-standard-32'
+
+options:
+  dynamic_substitutions: true
