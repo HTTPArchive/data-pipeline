@@ -40,16 +40,27 @@ jobs:
           name: coverage
           path: .coverage.${{ matrix.python-version }}
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        id: download
+        with:
+          name: 'coverage'
+
       - name: Coverage comment
         id: coverage_comment
-        uses: ewjoachim/python-coverage-comment-action@v2.1.0
+        uses: py-cov-action/python-coverage-comment-action@v3
         with:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MERGE_COVERAGE_FILES: true
-          VERBOSE: true
 
       - name: Store Pull Request comment to be posted
-        uses: actions/upload-artifact@v3.1.2
+        uses: actions/upload-artifact@v3
         if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
         with:
           # If you use a different name, update COMMENT_ARTIFACT_NAME accordingly
