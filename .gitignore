@@ -3,6 +3,10 @@
 /dist
 /build
 /env
+/venv
 *.pyc
 /.vscode
 .coverage
+
+# Ignore generated credentials from google-github-actions/auth
+gha-creds-*.json

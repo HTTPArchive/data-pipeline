@@ -1,0 +1,39 @@
+name: Deploy Dataflow Flex Template
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "**.py"
+      - "cloudbuild.yaml"
+      - "Dockerfile"
+      - "flex_template_metadata_*.json"
+      - "requirements.txt"
+
+jobs:
+  deploy:
+    name: Deploy Dataflow Flex Template
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Run build script
+        id: build_flex_template
+        run: echo "BUILD_TAG=$(build_flex_template.sh)" >> $GITHUB_OUTPUT
+      - name: Update Cloud Workflow build tag
+        # yamllint disable rule:line-length
+        run: sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".+"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' data-pipeline.workflows.yaml
+      - name: Auto Commit Cloud Workflow Update
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Bump data-pipeline.workflows.yaml to ${{ steps.build_flex_template.outputs.BUILD_TAG }}
+          file_pattern: data-pipeline.workflows.yaml
+
