@@ -33,22 +33,22 @@ jobs:
         shell: bash
       - name: Update Cloud Workflow build tag
         # yamllint disable rule:line-length
-        run: |
-          sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".+"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' data-pipeline.workflows.yaml
-          grep flexTemplateBuildTag: data-pipeline.workflows.yaml
-      # - name: Create Pull Request
-      #   id: cpr
-      #   uses: peter-evans/create-pull-request@v4
-      #   with:
-      #     add-paths: |
-      #       data-pipeline.workflows.yaml
-      #     branch-suffix: timestamp
-      #     commit-message: Bump dataflow flex template build tag
-      #     title: Bump dataflow flex template build tag
-      #     body: |
-      #       Bump dataflow flex template build tag to: ${{ steps.build_flex_template.outputs.BUILD_TAG }}
+        run: sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".+"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' data-pipeline.workflows.yaml
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v4
+        with:
+          add-paths: |
+            data-pipeline.workflows.yaml
+          branch-suffix: timestamp
+          commit-message: Bump dataflow flex template build tag
+          title: Bump dataflow flex template build tag
+          body: |
+            Bump dataflow flex template build tag to: ${{ steps.build_flex_template.outputs.BUILD_TAG }}
 
-      #       Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action
-      # - name: Check outputs
-      #   run: echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+            Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action
+      - name: Check outputs
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
 
