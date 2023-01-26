@@ -29,7 +29,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
       - name: Run build script
         id: build_flex_template
-        run: echo "BUILD_TAG=$(build_flex_template.sh)" >> $GITHUB_OUTPUT
+        run: echo "BUILD_TAG=$(./build_flex_template.sh)" >> $GITHUB_OUTPUT
         shell: bash
       - name: Update Cloud Workflow build tag
         # yamllint disable rule:line-length
