@@ -11,11 +11,13 @@ on:
       - "Dockerfile"
       - "flex_template_metadata_*.json"
       - "requirements.txt"
+  # TODO: remove before merging to main
+  pull_request:
 
 jobs:
   deploy:
     name: Deploy Dataflow Flex Template
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - id: 'auth'
@@ -31,9 +33,19 @@ jobs:
       - name: Update Cloud Workflow build tag
         # yamllint disable rule:line-length
         run: sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".+"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' data-pipeline.workflows.yaml
-      - name: Auto Commit Cloud Workflow Update
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: Bump data-pipeline.workflows.yaml to ${{ steps.build_flex_template.outputs.BUILD_TAG }}
-          file_pattern: data-pipeline.workflows.yaml
+      # - name: Create Pull Request
+      #   id: cpr
+      #   uses: peter-evans/create-pull-request@v4
+      #   with:
+      #     add-paths: |
+      #       data-pipeline.workflows.yaml
+      #     branch-suffix: timestamp
+      #     commit-message: Bump dataflow flex template build tag
+      #     title: Bump dataflow flex template build tag
+      #     body: |
+      #       Bump dataflow flex template build tag to: ${{ steps.build_flex_template.outputs.BUILD_TAG }}
+
+      #       Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action
+      # - name: Check outputs
+      #   run: echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
 
