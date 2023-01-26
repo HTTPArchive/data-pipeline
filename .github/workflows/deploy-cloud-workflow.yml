@@ -7,14 +7,11 @@ on:
       - main
     paths:
       - "data-pipeline.workflows.yaml"
-  workflow_run:
-    workflows: ["Deploy Dataflow Flex Template"]
-    types: ["completed"]
 
 jobs:
   deploy:
     name: Deploy Cloud Workflow
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - id: 'auth'

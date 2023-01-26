@@ -11,8 +11,6 @@ on:
       - "Dockerfile"
       - "flex_template_metadata_*.json"
       - "requirements.txt"
-  # TODO: remove before merging to main
-  pull_request:
 
 jobs:
   deploy:
@@ -27,7 +25,7 @@ jobs:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-      - name: Run build script
+      - name: Build flex templates
         id: build_flex_template
         run: echo "BUILD_TAG=$(./build_flex_template.sh | tail -1)" >> $GITHUB_OUTPUT
         shell: bash
