@@ -3,7 +3,7 @@
 set -e
 set -u
 
-BUILD_TAG=$(date +"%Y-%m-%d_%H-%M-%S")
+BUILD_TAG=$(date -u +"%Y-%m-%d_%H-%M-%S")
 
 for type in all combined
 do
