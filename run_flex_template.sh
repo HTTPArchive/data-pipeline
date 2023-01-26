@@ -8,7 +8,7 @@ REGION="us-west1"
 
 # type is the first script argument
 TYPE="${1}"
-DF_JOB_ID="${REPO}-${TYPE}-$(date +%Y%m%d-%H%M%S)"
+DF_JOB_ID="${REPO}-${TYPE}-$(date -u +%Y%m%d-%H%M%S)"
 DF_TEMP_BUCKET="gs://${PROJECT}-staging/dataflow"
 TEMPLATE_BASE_PATH="gs://${PROJECT}/dataflow/templates"
 
