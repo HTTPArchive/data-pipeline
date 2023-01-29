@@ -16,5 +16,7 @@ updates:
       interval: "daily"
   - package-ecosystem: "docker"
     directory: "/"
+    registries:
+      - gcr-registry
     schedule:
-      timezone: "daily"
+      interval: "daily"
