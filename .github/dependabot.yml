@@ -1,4 +1,10 @@
 version: 2
+registries:
+  gcr-registry:
+    type: docker-registry
+    url: https://gcr.io
+    username: _json_key
+    password: ${{ secrets.GCP_SA_KEY }}
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -8,3 +14,7 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      timezone: "daily"
