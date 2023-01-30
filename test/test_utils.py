@@ -242,6 +242,9 @@ class Test(TestCase):
     def test_is_home_page(self):
         tests = [
             ("no_metadata", dict(), True),
+            ("empty_metadata", {"metadata": dict()}, True),
+            ("depth_1_dict", {"metadata": {"crawl_depth": 0}}, True),
+            ("depth_2_dict", {"metadata": {"crawl_depth": 1}}, False),
             ("depth_1", {"metadata": '{"crawl_depth": 0}'}, True),
             ("depth_2", {"metadata": '{"crawl_depth": 1}'}, False),
         ]
