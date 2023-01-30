@@ -215,6 +215,25 @@ class TestHarJsonToSummary(TestCase):
         with self.assertRaises(Exception):
             HarJsonToSummary.import_page(None, {})
 
+    def test_import_entries(self):
+        self.assertEqual(
+            HarJsonToSummary.import_entries([dict(), dict()], dict()),
+            ([], "", "")
+        )
+
+    def test_import_entries_empty(self):
+        self.assertEqual(
+            HarJsonToSummary.import_entries([], dict()),
+            ([], "", "")
+        )
+
+    @mock.patch("modules.transformation.HarJsonToSummary.summarize_entry")
+    def test_import_entries_exception(self, summarize_entry_mock):
+        summarize_entry_mock.side_effect = RuntimeError("mocked error")
+        with self.assertLogs(level="WARNING") as log:
+            HarJsonToSummary.import_entries([dict()], dict())
+            self.assertIn("mocked error", log.output[0])
+
     def test_generate_pages(self):
         with mock.patch(
             "modules.transformation.HarJsonToSummary.initialize_status_info",
