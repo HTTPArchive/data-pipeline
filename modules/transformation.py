@@ -29,7 +29,7 @@ class ReadHarFiles(beam.PTransform):
     def is_valid_gzip(path):
         try:
             with FileSystems.open(path, compression_type=CompressionTypes.GZIP) as handle:
-                handle.peek()
+                handle.readline()
                 return True
         except Exception:
             logging.exception(f"Unable to read file: {path=}")
