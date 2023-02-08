@@ -6,6 +6,8 @@ import re
 
 import apache_beam as beam
 from apache_beam.io import WriteToBigQuery, BigQueryDisposition
+from apache_beam.io.filesystem import CompressionTypes
+from apache_beam.io.filesystems import FileSystems
 from dateutil import parser as date_parser
 
 from modules import constants, utils
@@ -22,6 +24,16 @@ class ReadHarFiles(beam.PTransform):
         super().__init__()
         self.input = input
         self.input_file = input_file
+
+    @staticmethod
+    def is_valid_gzip(path):
+        try:
+            with FileSystems.open(path, compression_type=CompressionTypes.GZIP) as handle:
+                handle.peek()
+                return True
+        except Exception:
+            logging.exception(f"Unable to read file: {path=}")
+            return False
 
     def expand(self, p):
         if self.input:
@@ -47,6 +59,7 @@ class ReadHarFiles(beam.PTransform):
         files = (
             reader
             | beam.Reshuffle()
+            | beam.Filter(ReadHarFiles.is_valid_gzip)
             | beam.io.ReadAllFromText(with_filename=True)
         )
 
