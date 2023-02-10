@@ -29,4 +29,4 @@ jobs:
           --project ${{ secrets.GCP_PROJECT_ID }} \
           --description "Runs the HTTPArchive data pipeline" \
           --labels "commit-sha=${{ github.sha }}" \
-          --service-account github-actions@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          --service-account workflows@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com

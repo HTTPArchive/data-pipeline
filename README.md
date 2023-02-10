@@ -169,10 +169,14 @@ This method is best used for serverlessly running the entire workflow, including
 - skip jobs where BigQuery tables have already been populated
 - automatically retry failed jobs
 
-Publishing a message containing the crawl's GCS path will trigger a GCP workflow.
+Publishing a message containing the crawl's GCS path(s) will trigger a GCP workflow.
 
 ``` shell
+# single path
 gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --message "gs://httparchive/crawls/android-Nov_1_2022"
+
+# multiple paths must be comma separated, without spaces
+gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --message "gs://httparchive/crawls/chrome-Feb_1_2023,gs://httparchive/crawls/android-Feb_1_2023"
 
 ```
 
