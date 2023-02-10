@@ -16,7 +16,7 @@ main:
                   event: ${event}
               result: crawlPaths
         - init:
-            assign:
+              assign:
                 - jobTypes: ["all", "combined"]
                 - checkIntervalSeconds: 300
                 - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
@@ -45,7 +45,7 @@ main:
                   checkIntervalSeconds: ${checkIntervalSeconds}
 
         - iterateCrawlPaths:
-            for:
+              for:
                 value: crawlPath
                 in: ${text.split(crawlPaths, ",")}
                 steps:
@@ -55,7 +55,7 @@ main:
                               - manifestPath: ${"gs://httparchive/crawls_manifest/" + manifestFileName}
                               - client: ${text.split(manifestFileName, "-")[0]}
                               - crawlDate: ${text.split(text.split(manifestFileName, "-")[1], ".")[0]}
-            
+
                     - resolveClientName:
                           switch:
                               - condition: ${client == "chrome"}
@@ -66,7 +66,7 @@ main:
                                     - client: "mobile"
                               - condition: true
                                 raise: ${"Unrecognized client, " + client}
-            
+
                     # generate a manifest file in GCS if it does not exist, otherwise continue
                     - generateManifest:
                           call: generateManifest
@@ -74,7 +74,7 @@ main:
                               crawlPath: ${crawlPath}
                               manifestPath: ${manifestPath}
                               manifestFileName: ${manifestFileName}
-            
+
                     - runDataflowJobs:
                           call: runDataflowJobs
                           args:
@@ -89,7 +89,7 @@ main:
                               project: ${project}
                               region: ${region}
                               checkIntervalSeconds: ${checkIntervalSeconds}
-            
+
                     # TODO: implement this
                     # - generateReports:
                     #     call: sys.log
