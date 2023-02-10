@@ -14,33 +14,17 @@ main:
               call: decodePubSubEventData
               args:
                   event: ${event}
-              result: crawlPath
-
+              result: crawlPaths
         - init:
-              assign:
-                  - jobTypes: ["all", "combined"]
-                  - checkIntervalSeconds: 300
-                  - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
-                  - region: "us-west1"
-                  - flexTemplateRepo: "data-pipeline"
-                  - flexTemplateBuildTag: "2023-01-26_06-27-20"
-                  - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
-                  - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
-                  - manifestFileName: ${text.find_all_regex(crawlPath, "[^/]*$")[0].match + ".txt"}
-                  - manifestPath: ${"gs://httparchive/crawls_manifest/" + manifestFileName}
-                  - client: ${text.split(manifestFileName, "-")[0]}
-                  - crawlDate: ${text.split(text.split(manifestFileName, "-")[1], ".")[0]}
-
-        - resolveClientName:
-              switch:
-                  - condition: ${client == "chrome"}
-                    assign:
-                        - client: "desktop"
-                  - condition: ${client == "android"}
-                    assign:
-                        - client: "mobile"
-                  - condition: true
-                    raise: ${"Unrecognized client, " + client}
+            assign:
+                - jobTypes: ["all", "combined"]
+                - checkIntervalSeconds: 300
+                - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+                - region: "us-west1"
+                - flexTemplateRepo: "data-pipeline"
+                - flexTemplateBuildTag: "2023-01-04_21-51-19"
+                - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
+                - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
 
         - setStartEndTimes:
               assign:
@@ -60,35 +44,58 @@ main:
                   endTime: ${endTime}
                   checkIntervalSeconds: ${checkIntervalSeconds}
 
-        # generate a manifest file in GCS if it does not exist, otherwise continue
-        - generateManifest:
-              call: generateManifest
-              args:
-                  crawlPath: ${crawlPath}
-                  manifestPath: ${manifestPath}
-                  manifestFileName: ${manifestFileName}
-
-        - runDataflowJobs:
-              call: runDataflowJobs
-              args:
-                  jobTypes: ${jobTypes}
-                  client: ${client}
-                  crawlDate: ${crawlDate}
-                  startTime: ${startTime}
-                  manifestPath: ${manifestPath}
-                  flexTemplateTemp: ${flexTemplateTemp}
-                  flexTemplateBasePath: ${flexTemplateBasePath}
-                  flexTemplateBuildTag: ${flexTemplateBuildTag}
-                  project: ${project}
-                  region: ${region}
-                  checkIntervalSeconds: ${checkIntervalSeconds}
-
-        # TODO: implement this
-        # - generateReports:
-        #     call: sys.log
-        #     args:
-        #         data: "generating reports"
-        #         severity: INFO
+        - iterateCrawlPaths:
+            for:
+                value: crawlPath
+                in: ${text.split(crawlPaths, ",")}
+                steps:
+                    - crawlAssignments:
+                          assign:
+                              - manifestFileName: ${text.find_all_regex(crawlPath, "[^/]*$")[0].match + ".txt"}
+                              - manifestPath: ${"gs://httparchive/crawls_manifest/" + manifestFileName}
+                              - client: ${text.split(manifestFileName, "-")[0]}
+                              - crawlDate: ${text.split(text.split(manifestFileName, "-")[1], ".")[0]}
+            
+                    - resolveClientName:
+                          switch:
+                              - condition: ${client == "chrome"}
+                                assign:
+                                    - client: "desktop"
+                              - condition: ${client == "android"}
+                                assign:
+                                    - client: "mobile"
+                              - condition: true
+                                raise: ${"Unrecognized client, " + client}
+            
+                    # generate a manifest file in GCS if it does not exist, otherwise continue
+                    - generateManifest:
+                          call: generateManifest
+                          args:
+                              crawlPath: ${crawlPath}
+                              manifestPath: ${manifestPath}
+                              manifestFileName: ${manifestFileName}
+            
+                    - runDataflowJobs:
+                          call: runDataflowJobs
+                          args:
+                              jobTypes: ${jobTypes}
+                              client: ${client}
+                              crawlDate: ${crawlDate}
+                              startTime: ${startTime}
+                              manifestPath: ${manifestPath}
+                              flexTemplateTemp: ${flexTemplateTemp}
+                              flexTemplateBasePath: ${flexTemplateBasePath}
+                              flexTemplateBuildTag: ${flexTemplateBuildTag}
+                              project: ${project}
+                              region: ${region}
+                              checkIntervalSeconds: ${checkIntervalSeconds}
+            
+                    # TODO: implement this
+                    # - generateReports:
+                    #     call: sys.log
+                    #     args:
+                    #         data: "generating reports"
+                    #         severity: INFO
 
 ### SUB-TASKS ###
 
