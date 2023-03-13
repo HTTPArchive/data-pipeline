@@ -4,6 +4,6 @@ setuptools.setup(
     name="data-pipeline",
     version="0.0.1",
     packages=setuptools.find_packages(),
-    install_requires=["apache-beam[gcp]==2.43.0"],
+    install_requires=["apache-beam[gcp]==2.46.0"],
     package_data={"schema": ["*.json"]},
 )
