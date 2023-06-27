@@ -435,27 +435,31 @@ def from_json(file_name, element):
     """Returns an object from the JSON representation."""
 
     try:
-        return file_name, json.loads(element)
+        return [(file_name, json.loads(element))]
     except Exception as e:
-        logging.error('Unable to parse JSON object "%s...": %s' % (element[:50], e))
-        return None
+        logging.error('Unable to parse JSON object "%s..." for file: %s: %s' % (file_name, element[:50], e))
+        return [(None)]
 
 
 def add_date_and_client(element):
     """Adds `date` and `client` attributes to facilitate BigQuery table routing"""
 
-    file_name, har = element
-    date, client = utils.date_and_client_from_file_name(file_name)
-    page = har.get("log").get("pages")[0]
-    metadata = page.get("_metadata", {})
-    har.update(
-        {
-            "date": "{:%Y_%m_%d}".format(date),
-            "client": metadata.get("layout", client).lower(),
-        }
-    )
+    try:
+        file_name, har = element
+        date, client = utils.date_and_client_from_file_name(file_name)
+        page = har.get("log").get("pages")[0]
+        metadata = page.get("_metadata", {})
+        har.update(
+            {
+                "date": "{:%Y_%m_%d}".format(date),
+                "client": metadata.get("layout", client).lower(),
+            }
+        )
 
-    return har
+        return har
+    except Exception as e:
+        logging.error('Unable to add date and client "%s...": %s' % (element[:50], e))
+        return None
 
 
 class WriteNonSummaryToBigQuery(beam.PTransform):
