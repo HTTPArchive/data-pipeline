@@ -454,7 +454,7 @@ def from_json(file_name, string):
     try:
         return file_name, json.loads(string)
     except json.JSONDecodeError as err:
-        logging.error('Unable to parse JSON object "%s...": %s', string[:50], err)
+        logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, string[:50], err))
         return None, None
 
 
@@ -511,7 +511,7 @@ def create_pipeline(argv=None):
     hars = (
         pipeline
         | ReadHarFiles(**vars(known_args))
-        | "MapJSON" >> beam.MapTuple(from_json)
+        | "MapJSON" >> beam.FlatMapTuple(from_json)
     )
 
     _ = (
