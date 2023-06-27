@@ -454,7 +454,7 @@ def from_json(file_name, string):
     try:
         return file_name, json.loads(string)
     except json.JSONDecodeError as err:
-        logging.error('Unable to parse JSON object "%s..." for file: %s: %s' % (file_name, string[:50], err))
+        logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, string[:50], err))
         return None, None
 
 

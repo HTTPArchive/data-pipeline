@@ -437,7 +437,7 @@ def from_json(file_name, element):
     try:
         return [(file_name, json.loads(element))]
     except Exception as e:
-        logging.error('Unable to parse JSON object "%s..." for file: %s: %s' % (file_name, element[:50], e))
+        logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, element[:50], e))
         return [(None)]
 
 
