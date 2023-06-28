@@ -511,7 +511,7 @@ def create_pipeline(argv=None):
     hars = (
         pipeline
         | ReadHarFiles(**vars(known_args))
-        | "MapJSON" >> beam.FlatMapTuple(from_json)
+        | "MapJSON" >> beam.MapTuple(from_json)
     )
 
     _ = (
