@@ -223,6 +223,8 @@ This pipeline can read individual HAR files, or a single file containing a list 
 
 Note the `run_pipeline_combined.sh` and `run_pipeline_all.sh` scriprts uses the parameters in the scripts and these cannot be overrung with parameters. These are often useful for local testing of changes (local testing still results in the processing happening in GCP but using code copied from locally).
 
+To save to different tables for testing, temporarily edit the `modules/constants.py` to prefix all the tables with `experimental_` (note the `experimental_parsed_css` is current production table so use `experimental_gc_parsed_css` instead for now).
+
 ### Generating HAR manifest files
 
 The pipeline can read a manifest file (text file containing GCS file paths separated by new lines for each HAR file). Follow the example to generate a manifest file:
@@ -318,6 +320,8 @@ flowchart LR
 ```
 
 This can be started by makling changes locally and then running the `run_pipeline_all.sh` or `run_pipeline_combined.sh` scripts (after changing input paramters in those scripts). Local code is copied to GCP for each run so your shell needs to be authenticated to GCP and have permissions to run.
+
+To save to different tables for testing, temporarily edit the `modules/constants.py` to prefix all the tables with `experimental_` (note the `experimental_parsed_css` is current production table so use `experimental_gc_parsed_css` instead for now).
 
 ## Logs
 
