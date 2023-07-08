@@ -151,7 +151,7 @@ def create_pipeline(argv=None):
     if combined_options.pipeline_type in ["combined", "non-summary"]:
         (
             files
-            | "MapJSON" >> beam.MapTuple(non_summary_pipeline.from_json)
+            | "MapJSON" >> beam.FlatMapTuple(non_summary_pipeline.from_json)
             | "AddDateAndClient" >> beam.Map(non_summary_pipeline.add_date_and_client)
             | "WriteNonSummaryTables"
             >> non_summary_pipeline.WriteNonSummaryToBigQuery(

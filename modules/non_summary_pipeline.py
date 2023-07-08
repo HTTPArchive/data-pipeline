@@ -435,7 +435,7 @@ def from_json(file_name, element):
     """Returns an object from the JSON representation."""
 
     try:
-        return file_name, json.loads(element)
+        return [(file_name, json.loads(element))]
     except Exception as e:
         logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, element[:50], e))
         return None
@@ -445,7 +445,7 @@ def add_date_and_client(element):
     """Adds `date` and `client` attributes to facilitate BigQuery table routing"""
 
     if element is None:
-        logging.error('Element is emoty, skipping adding date and time')
+        logging.error('Element is empty, skipping adding date and time')
         return None
 
     try:
