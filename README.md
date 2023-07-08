@@ -33,6 +33,19 @@ The new HTTP Archive data pipeline built entirely on GCP
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
+## Introduction
+
+This repo handles the HTTP Archive data pipeline, which takes the results of the monthly HTTP Archive run and saves this to the `httparchive` dataset in BigQuery.
+
+There are currently two main pipelines:
+
+- The `all` pipeline which saves data to the new `httparchive.all` dataset
+- The `combined` pipline which saves data to the legacy tables. This processes both the `summary` tables (`summary_pages` and `summary_requests`) and `non-summary` pipeline (`pages`, `requests`, `response_bodies`....etc.)
+
+The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is depolyed to GCP on each merge.
+
+They can also be run locally, whereby the local code is uploaded to GCP for that particular run.
+
 ## Diagrams
 
 ### GCP Workflows pipeline execution
@@ -208,6 +221,8 @@ This pipeline can read individual HAR files, or a single file containing a list 
 ./run_flex_template.sh combined --parameters input=gs://httparchive/crawls/chrome-Nov_1_2022
 ```
 
+Note the `run_pipeline_combined.sh` and `run_pipeline_all.sh` scriprts uses the parameters in the scripts and these cannot be overrung with parameters. These are often useful for local testing of changes (local testing still results in the processing happening in GCP but using code copied from locally).
+
 ### Generating HAR manifest files
 
 The pipeline can read a manifest file (text file containing GCS file paths separated by new lines for each HAR file). Follow the example to generate a manifest file:
@@ -301,6 +316,13 @@ flowchart LR
     C -->|Yes| E
     E --> End
 ```
+
+This can be started by makling changes locally and then running the `run_pipeline_all.sh` or `run_pipeline_combined.sh` scripts (after changing input paramters in those scripts). Local code is copied to GCP for each run so your shell needs to be authenticated to GCP and have permissions to run.
+
+## Logs
+
+- Error logs can be seen in [Error reporting](https://console.cloud.google.com/errors;time=P30D?project=httparchive) GCP
+- Jobs can be seen in the [Dataflow -> Jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) screen of GCP.
 
 ## Known issues
 
