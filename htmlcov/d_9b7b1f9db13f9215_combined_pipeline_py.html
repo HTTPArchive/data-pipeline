@@ -77,7 +77,7 @@
             <a id="nextFileLink" class="nav" href="d_9b7b1f9db13f9215_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.2.7">coverage.py v7.2.7</a>,
-            created at 2023-06-28 22:43 +0000
+            created at 2023-07-10 22:21 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"/>
@@ -245,7 +245,7 @@
     <p class="run"><span class="n"><a id="t151" href="#t151">151</a></span><span class="t">    <span class="key">if</span> <span class="nam">combined_options</span><span class="op">.</span><span class="nam">pipeline_type</span> <span class="key">in</span> <span class="op">[</span><span class="str">"combined"</span><span class="op">,</span> <span class="str">"non-summary"</span><span class="op">]</span><span class="op">:</span>&nbsp;</span><input type="checkbox" id="ctxs151" /><span class="r"><label for="ctxs151" class="ctx">1 ctx</label></span><span class="ctxs">1a</span></p>
     <p class="run"><span class="n"><a id="t152" href="#t152">152</a></span><span class="t">        <span class="op">(</span>&nbsp;</span><input type="checkbox" id="ctxs152" /><span class="r"><label for="ctxs152" class="ctx">1 ctx</label></span><span class="ctxs">1a</span></p>
     <p class="pln"><span class="n"><a id="t153" href="#t153">153</a></span><span class="t">            <span class="nam">files</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">            <span class="op">|</span> <span class="str">"MapJSON"</span> <span class="op">>></span> <span class="nam">beam</span><span class="op">.</span><span class="nam">MapTuple</span><span class="op">(</span><span class="nam">non_summary_pipeline</span><span class="op">.</span><span class="nam">from_json</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t154" href="#t154">154</a></span><span class="t">            <span class="op">|</span> <span class="str">"MapJSON"</span> <span class="op">>></span> <span class="nam">beam</span><span class="op">.</span><span class="nam">FlatMapTuple</span><span class="op">(</span><span class="nam">non_summary_pipeline</span><span class="op">.</span><span class="nam">from_json</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t155" href="#t155">155</a></span><span class="t">            <span class="op">|</span> <span class="str">"AddDateAndClient"</span> <span class="op">>></span> <span class="nam">beam</span><span class="op">.</span><span class="nam">Map</span><span class="op">(</span><span class="nam">non_summary_pipeline</span><span class="op">.</span><span class="nam">add_date_and_client</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t156" href="#t156">156</a></span><span class="t">            <span class="op">|</span> <span class="str">"WriteNonSummaryTables"</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t157" href="#t157">157</a></span><span class="t">            <span class="op">>></span> <span class="nam">non_summary_pipeline</span><span class="op">.</span><span class="nam">WriteNonSummaryToBigQuery</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
@@ -263,7 +263,7 @@
             <a id="nextFileLink" class="nav" href="d_9b7b1f9db13f9215_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.2.7">coverage.py v7.2.7</a>,
-            created at 2023-06-28 22:43 +0000
+            created at 2023-07-10 22:21 +0000
         </p>
     </div>
 </footer>
