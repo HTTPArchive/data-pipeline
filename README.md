@@ -167,11 +167,11 @@ Steps:
 2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
 3. Click "CREATE JOB FROM TEMPLATE"
 4. Provide a "Job name"
-5. Pick a region with enough Compute quota (e.g. us-west1)
+5. Change region to `us-west1`
 6. Choose "Custom Template"
-7. Browse to the template directory (e.g. `gs://httparchive/dataflow/templates`)
-8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-all-2023-01-04_21-51-19.json`)
-9. Click "SHOW OPTIONAL PARAMETERS" and provide an input for the "GCS input path" (path of HAR files) or "GCS input file" (path of HAR manifest)
+7. Browse to the template directory by pasting `httparchive/dataflow/templates/` into the `Template path`, ignoring the error saying this is not a file, and then clicking Browse to choose the actual file from that directory.
+8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-combined-2023-02-10_03-55-04.json` - choose the latest one for `all` or `combined`)
+9. Click "SHOW OPTIONAL PARAMETERS" and provide an input for the "GCS input file"  pointing to the manifests file (e.g. `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Desktop Jul 2023 or `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Mobile for July 2023).
 10. (Optional) provide values for any additional parameters
 11. Click "RUN JOB"
 
