@@ -2,6 +2,9 @@ steps:
 - id: 'build_image'
   name: 'gcr.io/cloud-builders/docker'
   args: ['build', '-t', '${_TEMPLATE_IMAGE}', '--build-arg=TYPE=${_TYPE}', '.']
+  logsBucket: 'gs://httparchive/dataflow/buildlogs'
+  options:
+    logging: GCS_ONLY
 - id: 'build_template'
   name: 'gcr.io/cloud-builders/gcloud'
   args:
