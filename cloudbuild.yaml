@@ -29,3 +29,6 @@ substitutions:
 
 options:
   dynamic_substitutions: true
+  logging: GCS_ONLY
+
+logsBucket: 'gs://httparchive/dataflow/buildlogs'
