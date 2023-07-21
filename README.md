@@ -134,9 +134,9 @@ sequenceDiagram
 
 ## Run the pipeline
 Dataflow jobs can be triggered several ways:
-- Locally using bash scripts
-- From the Google Cloud Console
-- By publishing a Pub/Sub message
+- Locally using bash scripts (this is good to test uncommited code)
+- From the Google Cloud Console (this is good to run commited code)
+- By publishing a Pub/Sub message (this is good for the batch kicking off jobs when done)
 
 ### Locally using the `run_*.sh` scripts
 
@@ -167,7 +167,7 @@ Steps:
 2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
 3. Click "CREATE JOB FROM TEMPLATE"
 4. Provide a "Job name"
-5. Change region to `us-west1`
+5. Change region to `us-west1` (as that's where we have most compute capacity)
 6. Choose "Custom Template"
 7. Browse to the template directory by pasting `httparchive/dataflow/templates/` into the `Template path`, ignoring the error saying this is not a file, and then clicking Browse to choose the actual file from that directory.
 8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-combined-2023-02-10_03-55-04.json` - choose the latest one for `all` or `combined`)
@@ -252,8 +252,10 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 
 [GitHub actions](.github/workflows/) are used to automate the build and deployment of Google Cloud Workflows and Dataflow Flex Templates. Actions are triggered on merges to the `main` branch, for specific files, and when other related GitHub actions have completed successfully.
 
-- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata)
-- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully
+- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata). This will build and upload the new builds (where they _can_ be used) and update the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) with the latest build tag (based on datetime) and open a PR to merge that (so the new builds _will_ be used by the batch).
+- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully.
+
+PRs with a title of `Bump dataflow flex template build tag` should be merged providing they are only updating the build datetime in the `flexTemplateBuildTag`. Check it has not zeroed it out.
 
 ### Build inputs and artifacts
 
