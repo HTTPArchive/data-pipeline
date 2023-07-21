@@ -253,7 +253,7 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 [GitHub actions](.github/workflows/) are used to automate the build and deployment of Google Cloud Workflows and Dataflow Flex Templates. Actions are triggered on merges to the `main` branch, for specific files, and when other related GitHub actions have completed successfully.
 
 - [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata). This will build and upload the new builds (where they _can_ be used) and update the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) with the latest build tag (based on datetime) and open a PR to merge that (so the new builds _will_ be used by the batch).
-- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully.
+- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, _or_ when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully.
 
 PRs with a title of `Bump dataflow flex template build tag` should be merged providing they are only updating the build datetime in the `flexTemplateBuildTag`. Check it has not zeroed it out.
 
