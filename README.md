@@ -140,7 +140,8 @@ sequenceDiagram
 
 Dataflow jobs can be triggered several ways:
 - Locally using bash scripts (this is good to test uncommited code)
-- From the Google Cloud Console (this is good to run commited code for the dataflow pipeline only)
+- From the Google Cloud Console in Dataflow section by choosing to run a flex template (this is good to run commited code for the dataflow pipeline only)
+- From the Google Cloud Console in Workflow section by choosing to execute jobs in the `data-pipeline` workflow again (this is good to rerun failed parts of the workflow after reason for failure is fixed)
 - By publishing a Pub/Sub message to run the whole workflow (this kicks off the whole workflow and not just the pipeline so is good for the batch kicking off jobs when done, or to rerun manually when the manifest file was not generated)
 
 ### Locally using the `run_*.sh` scripts
@@ -179,6 +180,15 @@ Steps:
 9. Expand "Optional Parameters" and provide an input for the "GCS input file" pointing to the manifests file (e.g. `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Desktop Jul 2023 or `gs://httparchive/crawls_manifest/android-Jul_1_2023.txt` for Mobile for July 2023).
 10. (Optional) provide values for any additional parameters
 11. Click "RUN JOB"
+
+### Rerunning a failed workflow step
+
+This method is useful for running the entire workflow from the web console since it does not require a development environment. It is useful when the manifest file was not generated, but does require each step to be re-executed individually, so probably easier to just republish a Pub/Sub message instead (See next section).
+
+Steps:
+1. From the Google Cloud Console, navigate to the Workflow > Workflows page
+2. Select the `data-pipeline` workflow
+3. In the Actions column click the three dots and select "Execute again"
 
 ### Publishing a Pub/Sub message
 
