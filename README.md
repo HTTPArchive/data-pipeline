@@ -42,9 +42,13 @@ There are currently two main pipelines:
 - The `all` pipeline which saves data to the new `httparchive.all` dataset
 - The `combined` pipline which saves data to the legacy tables. This processes both the `summary` tables (`summary_pages` and `summary_requests`) and `non-summary` pipeline (`pages`, `requests`, `response_bodies`....etc.)
 
-The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is depolyed to GCP on each merge.
+The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is deployed to GCP on each merge.
 
-They can also be run locally, whereby the local code is uploaded to GCP for that particular run.
+The [`data-pipeline` workflow](https://console.cloud.google.com/workflows/workflow/us-west1/data-pipeline/executions?project=httparchive) as defined by the [data-pipeline-workflows.yaml](./data-pipeline-workflows.yaml) file, runs the whole process from start to finish, including generating the manifest file for each of the two runs (desktop and mobile) nd the four dataflow jobs (desktop all, mobile all, desktop combined, mobile combined) to upload of the HAR files to the BigQuery tables. This can be rerun in case of failure by [publishing a crawl-complete message](#publishing-a-pubsub-message), providing no data was saved to the final BigQuery tables.
+
+The four [dataflow jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) can be [rerun](#run-the-pipeline) in case of failure, but the BigQuery tables need to be cleared down first (including any [lingering temp tables](https://github.com/HTTPArchive/data-pipeline/tree/update-readme-with-more-info#temp-table-cleanup))
+
+The dataflow can also be run locally, whereby the local code is uploaded to GCP for that particular run.
 
 ## Diagrams
 
@@ -133,10 +137,11 @@ sequenceDiagram
 ```
 
 ## Run the pipeline
+
 Dataflow jobs can be triggered several ways:
 - Locally using bash scripts (this is good to test uncommited code)
 - From the Google Cloud Console (this is good to run commited code)
-- By publishing a Pub/Sub message (this is good for the batch kicking off jobs when done)
+- By publishing a Pub/Sub message to run the whole workflow (this is good for the batch kicking off jobs when done, and will also generate the manifest file)
 
 ### Locally using the `run_*.sh` scripts
 
@@ -165,13 +170,13 @@ https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run
 Steps:
 1. Locate the desired build tag (e.g. see `flexTemplateBuildTag` in the [data-pipeline.workflows.yaml](data-pipeline.workflows.yaml))
 2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
-3. Click "CREATE JOB FROM TEMPLATE"
+3. Click "Create job from template"
 4. Provide a "Job name"
 5. Change region to `us-west1` (as that's where we have most compute capacity)
-6. Choose "Custom Template"
-7. Browse to the template directory by pasting `httparchive/dataflow/templates/` into the `Template path`, ignoring the error saying this is not a file, and then clicking Browse to choose the actual file from that directory.
+6. Choose "Custom Template" from the bottom of the "Dataflow template" drop down.
+7. Browse to the template directory by pasting `httparchive/dataflow/templates/` into the "Template path", ignoring the error saying this is not a file, and then clicking Browse to choose the actual file from that directory.
 8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-combined-2023-02-10_03-55-04.json` - choose the latest one for `all` or `combined`)
-9. Click "SHOW OPTIONAL PARAMETERS" and provide an input for the "GCS input file"  pointing to the manifests file (e.g. `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Desktop Jul 2023 or `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Mobile for July 2023).
+9. Expand "Optional Parameters" and provide an input for the "GCS input file" pointing to the manifests file (e.g. `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Desktop Jul 2023 or `gs://httparchive/crawls_manifest/android-Jul_1_2023.txt` for Mobile for July 2023).
 10. (Optional) provide values for any additional parameters
 11. Click "RUN JOB"
 
@@ -192,7 +197,6 @@ gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --messag
 gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --message "gs://httparchive/crawls/chrome-Feb_1_2023,gs://httparchive/crawls/android-Feb_1_2023"
 
 ```
-
 
 ### Pipeline types
 
@@ -221,7 +225,7 @@ This pipeline can read individual HAR files, or a single file containing a list 
 ./run_flex_template.sh combined --parameters input=gs://httparchive/crawls/chrome-Nov_1_2022
 ```
 
-Note the `run_pipeline_combined.sh` and `run_pipeline_all.sh` scriprts uses the parameters in the scripts and these cannot be overrung with parameters. These are often useful for local testing of changes (local testing still results in the processing happening in GCP but using code copied from locally).
+Note the `run_pipeline_combined.sh` and `run_pipeline_all.sh` scriprts uses the parameters in the scripts and these cannot be overridden with command line parameters. These are often useful for local testing of changes (local testing still results in the processing happening in GCP but using code copied from locally).
 
 To save to different tables for testing, temporarily edit the `modules/constants.py` to prefix all the tables with `experimental_` (note the `experimental_parsed_css` is current production table so use `experimental_gc_parsed_css` instead for now).
 
