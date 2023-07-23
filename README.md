@@ -140,8 +140,8 @@ sequenceDiagram
 
 Dataflow jobs can be triggered several ways:
 - Locally using bash scripts (this is good to test uncommited code)
-- From the Google Cloud Console (this is good to run commited code)
-- By publishing a Pub/Sub message to run the whole workflow (this is good for the batch kicking off jobs when done, and will also generate the manifest file)
+- From the Google Cloud Console (this is good to run commited code for the dataflow pipeline only)
+- By publishing a Pub/Sub message to run the whole workflow (this kicks off the whole workflow and not just the pipeline so is good for the batch kicking off jobs when done, or to rerun manually when the manifest file was not generated)
 
 ### Locally using the `run_*.sh` scripts
 
