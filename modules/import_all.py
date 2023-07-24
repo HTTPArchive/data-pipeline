@@ -452,10 +452,10 @@ def from_json(file_name, string):
     """Returns an object from the JSON representation."""
 
     try:
-        return file_name, json.loads(string)
+        return [(file_name, json.loads(string))]
     except json.JSONDecodeError as err:
         logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, string[:50], err))
-        return None, None
+        return None
 
 
 def json_exceeds_max_content_size(data: Union[Dict, str], max_content_size, typ, wptid):
