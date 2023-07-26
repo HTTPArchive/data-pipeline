@@ -44,11 +44,11 @@ There are currently two main pipelines:
 
 The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is deployed to GCP on each merge.
 
-The [`data-pipeline` workflow](https://console.cloud.google.com/workflows/workflow/us-west1/data-pipeline/executions?project=httparchive) as defined by the [data-pipeline-workflows.yaml](./data-pipeline-workflows.yaml) file, runs the whole process from start to finish, including generating the manifest file for each of the two runs (desktop and mobile) nd the four dataflow jobs (desktop all, mobile all, desktop combined, mobile combined) to upload of the HAR files to the BigQuery tables. This can be rerun in case of failure by [publishing a crawl-complete message](#publishing-a-pubsub-message), providing no data was saved to the final BigQuery tables.
+The [`data-pipeline` workflow](https://console.cloud.google.com/workflows/workflow/us-west1/data-pipeline/executions?project=httparchive) as defined by the [data-pipeline-workflows.yaml](./data-pipeline-workflows.yaml) file, runs the whole process from start to finish, including generating the manifest file for each of the two runs (desktop and mobile) and then starting the four dataflow jobs (desktop all, mobile all, desktop combined, mobile combined) in sequence to upload of the HAR files to the BigQuery tables. This can be rerun in case of failure by [publishing a crawl-complete message](#publishing-a-pubsub-message), providing no data was saved to the final BigQuery tables.
 
-The four [dataflow jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) can be [rerun](#run-the-pipeline) in case of failure, but the BigQuery tables need to be cleared down first (including any [lingering temp tables](https://github.com/HTTPArchive/data-pipeline/tree/update-readme-with-more-info#temp-table-cleanup))
+The four [dataflow jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) can also be [rerun](#run-the-pipeline) individually in case of failure, but the BigQuery tables need to be cleared down first (including any [lingering temp tables](https://github.com/HTTPArchive/data-pipeline/tree/update-readme-with-more-info#temp-table-cleanup))
 
-The dataflow can also be run locally, whereby the local code is uploaded to GCP for that particular run.
+The dataflow jobs can also be [run locally](#locally-using-the-run_sh-scripts), whereby the local code is uploaded to GCP for that particular run.
 
 ## Diagrams
 
@@ -139,10 +139,10 @@ sequenceDiagram
 ## Run the pipeline
 
 Dataflow jobs can be triggered several ways:
-- Locally using bash scripts (this is good to test uncommited code)
-- From the Google Cloud Console in Dataflow section by choosing to run a flex template (this is good to run commited code for the dataflow pipeline only)
-- From the Google Cloud Console in Workflow section by choosing to execute jobs in the `data-pipeline` workflow again (this is good to rerun failed parts of the workflow after reason for failure is fixed)
-- By publishing a Pub/Sub message to run the whole workflow (this kicks off the whole workflow and not just the pipeline so is good for the batch kicking off jobs when done, or to rerun manually when the manifest file was not generated)
+- Locally using bash scripts (this can be used to test uncommited code, or code on a non-`main`` branch)
+- From the Google Cloud Console in Dataflow section by choosing to run a flex template (this can be used to run commited code for a particular dataflow pipeline only)
+- From the Google Cloud Console in Workflow section by choosing to execute a failed `data-pipeline` workflow again (this can be used to rerun failed parts of the workflow after reason for failure is fixed)
+- By publishing a Pub/Sub message to run the whole workflow (this kicks off the whole workflow and not just the pipeline so is good for the batch kicking off jobs when done, or to rerun the whole process manually when the manifest file was not generated)
 
 ### Locally using the `run_*.sh` scripts
 
@@ -171,7 +171,7 @@ https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run
 Steps:
 1. Locate the desired build tag (e.g. see `flexTemplateBuildTag` in the [data-pipeline.workflows.yaml](data-pipeline.workflows.yaml))
 2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
-3. Click "Create job from template"
+3. Click "CREATE JOB FROM TEMPLATE" at the top of the page.
 4. Provide a "Job name"
 5. Change region to `us-west1` (as that's where we have most compute capacity)
 6. Choose "Custom Template" from the bottom of the "Dataflow template" drop down.
@@ -181,9 +181,9 @@ Steps:
 10. (Optional) provide values for any additional parameters
 11. Click "RUN JOB"
 
-### Rerunning a failed workflow step
+### Rerunning a failed workflow
 
-This method is useful for running the entire workflow from the web console since it does not require a development environment. It is useful when the manifest file was not generated, but does require each step to be re-executed individually, so probably easier to just republish a Pub/Sub message instead (See next section).
+This method is useful for running the entire workflow from the web console since it does not require a development environment. It is useful when the part of the workflow failed for known reasons that have since been resolved. Prevous steps should be skipped as the workflow checks if they have already been run.
 
 Steps:
 1. From the Google Cloud Console, navigate to the Workflow > Workflows page
@@ -269,7 +269,7 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 - [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata). This will build and upload the new builds (where they _can_ be used) and update the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) with the latest build tag (based on datetime) and open a PR to merge that (so the new builds _will_ be used by the batch).
 - [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, _or_ when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully.
 
-PRs with a title of `Bump dataflow flex template build tag` should be merged providing they are only updating the build datetime in the `flexTemplateBuildTag`. Check it has not zeroed it out.
+PRs with a title of `Bump dataflow flex template build tag` should be merged providing they are only updating the build datetime in the `flexTemplateBuildTag`. Check it has not zeroed the build datetime out (this can happen if the job errors in unusual ways).
 
 ### Build inputs and artifacts
 
@@ -343,6 +343,7 @@ To save to different tables for testing, temporarily edit the `modules/constants
 
 - Error logs can be seen in [Error reporting](https://console.cloud.google.com/errors;time=P30D?project=httparchive) GCP
 - Jobs can be seen in the [Dataflow -> Jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) screen of GCP.
+- Workflows can be seen in the [Workflows -> Workflows](https://console.cloud.google.com/workflows?project=httparchive) screen of GCP.
 
 ## Known issues
 
