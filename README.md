@@ -33,6 +33,23 @@ The new HTTP Archive data pipeline built entirely on GCP
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
+## Introduction
+
+This repo handles the HTTP Archive data pipeline, which takes the results of the monthly HTTP Archive run and saves this to the `httparchive` dataset in BigQuery.
+
+There are currently two main pipelines:
+
+- The `all` pipeline which saves data to the new `httparchive.all` dataset
+- The `combined` pipline which saves data to the legacy tables. This processes both the `summary` tables (`summary_pages` and `summary_requests`) and `non-summary` pipeline (`pages`, `requests`, `response_bodies`....etc.)
+
+The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is deployed to GCP on each merge.
+
+The [`data-pipeline` workflow](https://console.cloud.google.com/workflows/workflow/us-west1/data-pipeline/executions?project=httparchive) as defined by the [data-pipeline-workflows.yaml](./data-pipeline-workflows.yaml) file, runs the whole process from start to finish, including generating the manifest file for each of the two runs (desktop and mobile) and then starting the four dataflow jobs (desktop all, mobile all, desktop combined, mobile combined) in sequence to upload of the HAR files to the BigQuery tables. This can be rerun in case of failure by [publishing a crawl-complete message](#publishing-a-pubsub-message), providing no data was saved to the final BigQuery tables.
+
+The four [dataflow jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) can also be [rerun](#run-the-pipeline) individually in case of failure, but the BigQuery tables need to be cleared down first (including any [lingering temp tables](https://github.com/HTTPArchive/data-pipeline/tree/update-readme-with-more-info#temp-table-cleanup))
+
+The dataflow jobs can also be [run locally](#locally-using-the-run_sh-scripts), whereby the local code is uploaded to GCP for that particular run.
+
 ## Diagrams
 
 ### GCP Workflows pipeline execution
@@ -120,10 +137,12 @@ sequenceDiagram
 ```
 
 ## Run the pipeline
+
 Dataflow jobs can be triggered several ways:
-- Locally using bash scripts
-- From the Google Cloud Console
-- By publishing a Pub/Sub message
+- Locally using bash scripts (this can be used to test uncommited code, or code on a non-`main`` branch)
+- From the Google Cloud Console in Dataflow section by choosing to run a flex template (this can be used to run commited code for a particular dataflow pipeline only)
+- From the Google Cloud Console in Workflow section by choosing to execute a failed `data-pipeline` workflow again (this can be used to rerun failed parts of the workflow after reason for failure is fixed)
+- By publishing a Pub/Sub message to run the whole workflow (this kicks off the whole workflow and not just the pipeline so is good for the batch kicking off jobs when done, or to rerun the whole process manually when the manifest file was not generated)
 
 ### Locally using the `run_*.sh` scripts
 
@@ -152,15 +171,24 @@ https://cloud.google.com/dataflow/docs/guides/templates/using-flex-templates#run
 Steps:
 1. Locate the desired build tag (e.g. see `flexTemplateBuildTag` in the [data-pipeline.workflows.yaml](data-pipeline.workflows.yaml))
 2. From the Google Cloud Console, navigate to the Dataflow > Jobs page
-3. Click "CREATE JOB FROM TEMPLATE"
+3. Click "CREATE JOB FROM TEMPLATE" at the top of the page.
 4. Provide a "Job name"
-5. Pick a region with enough Compute quota (e.g. us-west1)
-6. Choose "Custom Template"
-7. Browse to the template directory (e.g. `gs://httparchive/dataflow/templates`)
-8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-all-2023-01-04_21-51-19.json`)
-9. Click "SHOW OPTIONAL PARAMETERS" and provide an input for the "GCS input path" (path of HAR files) or "GCS input file" (path of HAR manifest)
+5. Change region to `us-west1` (as that's where we have most compute capacity)
+6. Choose "Custom Template" from the bottom of the "Dataflow template" drop down.
+7. Browse to the template directory by pasting `httparchive/dataflow/templates/` into the "Template path", ignoring the error saying this is not a file, and then clicking Browse to choose the actual file from that directory.
+8. Choose the pipeline type (e.g. all or combined) for the chosen build tag (e.g. `data-pipeline-combined-2023-02-10_03-55-04.json` - choose the latest one for `all` or `combined`)
+9. Expand "Optional Parameters" and provide an input for the "GCS input file" pointing to the manifests file (e.g. `gs://httparchive/crawls_manifest/chrome-Jul_1_2023.txt` for Desktop Jul 2023 or `gs://httparchive/crawls_manifest/android-Jul_1_2023.txt` for Mobile for July 2023).
 10. (Optional) provide values for any additional parameters
 11. Click "RUN JOB"
+
+### Rerunning a failed workflow
+
+This method is useful for running the entire workflow from the web console since it does not require a development environment. It is useful when the part of the workflow failed for known reasons that have since been resolved. Prevous steps should be skipped as the workflow checks if they have already been run.
+
+Steps:
+1. From the Google Cloud Console, navigate to the Workflow > Workflows page
+2. Select the `data-pipeline` workflow
+3. In the Actions column click the three dots and select "Execute again"
 
 ### Publishing a Pub/Sub message
 
@@ -179,7 +207,6 @@ gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --messag
 gcloud pubsub topics publish projects/httparchive/topics/crawl-complete --message "gs://httparchive/crawls/chrome-Feb_1_2023,gs://httparchive/crawls/android-Feb_1_2023"
 
 ```
-
 
 ### Pipeline types
 
@@ -208,6 +235,10 @@ This pipeline can read individual HAR files, or a single file containing a list 
 ./run_flex_template.sh combined --parameters input=gs://httparchive/crawls/chrome-Nov_1_2022
 ```
 
+Note the `run_pipeline_combined.sh` and `run_pipeline_all.sh` scriprts uses the parameters in the scripts and these cannot be overridden with command line parameters. These are often useful for local testing of changes (local testing still results in the processing happening in GCP but using code copied from locally).
+
+To save to different tables for testing, temporarily edit the `modules/constants.py` to prefix all the tables with `experimental_` (note the `experimental_parsed_css` is current production table so use `experimental_gc_parsed_css` instead for now).
+
 ### Generating HAR manifest files
 
 The pipeline can read a manifest file (text file containing GCS file paths separated by new lines for each HAR file). Follow the example to generate a manifest file:
@@ -235,8 +266,10 @@ gsutil -m cp ./*Nov*.txt gs://httparchive/crawls_manifest/
 
 [GitHub actions](.github/workflows/) are used to automate the build and deployment of Google Cloud Workflows and Dataflow Flex Templates. Actions are triggered on merges to the `main` branch, for specific files, and when other related GitHub actions have completed successfully.
 
-- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata)
-- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, *or* when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully
+- [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) will trigger when files related to the data pipeline are updated (e.g. python, Dockerfile, flex template metadata). This will build and upload the new builds (where they _can_ be used) and update the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) with the latest build tag (based on datetime) and open a PR to merge that (so the new builds _will_ be used by the batch).
+- [Deploy Cloud Workflow](.github/workflows/deploy-cloud-workflow.yml) action will trigger when the [data-pipeline workflows YAML](data-pipeline.workflows.yaml) is updated, _or_ when the [Deploy Dataflow Flex Template](.github/workflows/deploy-dataflow-flex-template.yml) action has completed successfully.
+
+PRs with a title of `Bump dataflow flex template build tag` should be merged providing they are only updating the build datetime in the `flexTemplateBuildTag`. Check it has not zeroed the build datetime out (this can happen if the job errors in unusual ways).
 
 ### Build inputs and artifacts
 
@@ -301,6 +334,16 @@ flowchart LR
     C -->|Yes| E
     E --> End
 ```
+
+This can be started by makling changes locally and then running the `run_pipeline_all.sh` or `run_pipeline_combined.sh` scripts (after changing input paramters in those scripts). Local code is copied to GCP for each run so your shell needs to be authenticated to GCP and have permissions to run.
+
+To save to different tables for testing, temporarily edit the `modules/constants.py` to prefix all the tables with `experimental_` (note the `experimental_parsed_css` is current production table so use `experimental_gc_parsed_css` instead for now).
+
+## Logs
+
+- Error logs can be seen in [Error reporting](https://console.cloud.google.com/errors;time=P30D?project=httparchive) GCP
+- Jobs can be seen in the [Dataflow -> Jobs](https://console.cloud.google.com/dataflow/jobs?project=httparchive) screen of GCP.
+- Workflows can be seen in the [Workflows -> Workflows](https://console.cloud.google.com/workflows?project=httparchive) screen of GCP.
 
 ## Known issues
 

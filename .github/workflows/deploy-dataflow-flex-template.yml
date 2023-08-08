@@ -44,6 +44,8 @@ jobs:
           body: |
             Bump dataflow flex template build tag to: ${{ steps.build_flex_template.outputs.BUILD_TAG }}
 
+            If this is the only change, and it has not accidently blanked this out, then you can safely merge this to use the latest build on the next run.
+
             Automated changes by [create-pull-request](https://github.com/peter-evans/create-pull-request) GitHub action
       - name: Check outputs
         run: |
