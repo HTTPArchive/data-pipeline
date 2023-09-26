@@ -180,7 +180,7 @@ bigQueryCountAll:
                   body:
                       useLegacySql: false
                       useQueryCache: false
-                      timeoutMs: 30000
+                      timeoutMs: 300000
                       labels:
                           workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
                           workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
@@ -219,7 +219,7 @@ bigQueryCountCombined:
                   body:
                       useLegacySql: false
                       useQueryCache: false
-                      timeoutMs: 30000
+                      timeoutMs: 300000
                       labels:
                           workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
                           workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
