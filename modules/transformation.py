@@ -501,6 +501,9 @@ class HarJsonToSummary:
 
     @staticmethod
     def aggregate_stats(entries, first_url, first_html_url, status_info):
+        if not entries or entries == [None]:
+            logging.error(f"No entries found. status_info={status_info}")
+            return None
         if not first_url:
             logging.error(f"No first URL found. status_info={status_info}")
             return None
@@ -556,6 +559,9 @@ class HarJsonToSummary:
         ) = num_errors = num_glibs = num_https = num_compressed = max_domain_reqs = 0
 
         for entry in entries:
+            if not entry:
+                logging.warning(f"Empty entry, status_info:{status_info}")
+                continue
             url = entry["urlShort"]
             pretty_type = entry["type"]
             resp_size = int(entry["respSize"])
