@@ -176,7 +176,7 @@ class HarJsonToSummary:
         entries, first_url, first_html_url = HarJsonToSummary.import_entries(
             log["entries"], status_info
         )
-        if not entries:
+        if not entries or entries == [None]:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
             return None, None
         else:
