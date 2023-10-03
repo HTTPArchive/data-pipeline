@@ -193,6 +193,9 @@ class HarJsonToSummary:
 
         utils.clamp_integers(page, utils.int_columns_for_schema("pages"))
         for entry in entries:
+            if not entry:
+                logging.warning(f"Empty entry")
+                continue
             utils.clamp_integers(entry, utils.int_columns_for_schema("requests"))
 
         return page, entries
@@ -205,6 +208,9 @@ class HarJsonToSummary:
         entry_number = 0
 
         for entry in entries:
+            if not entry:
+                logging.warning(f"Empty entry, status_info:{status_info}")
+                continue
             try:
                 (
                     request,
