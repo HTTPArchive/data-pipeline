@@ -215,6 +215,9 @@ def int_columns_for_schema(schema_name):
 
 
 def is_home_page(element):
+    if not element
+        # assume False by default
+        return False
     metadata = element.get("metadata")
     if metadata:
         # use metadata.crawl_depth starting from 2022-05

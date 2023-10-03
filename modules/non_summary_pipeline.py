@@ -79,6 +79,8 @@ def get_metadata(har):
 
 
 def is_home_page(mapped_har):
+    if not mapped_har:
+        return False
     metadata = mapped_har.get("metadata")
     if metadata and "crawl_depth" in metadata:
         return metadata.get("crawl_depth") == 0
