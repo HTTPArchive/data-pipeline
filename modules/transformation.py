@@ -85,6 +85,7 @@ class WriteBigQuery(beam.PTransform):
             "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
             "write_disposition": BigQueryDisposition.WRITE_APPEND,
             "additional_bq_parameters": {
+                "maxBadRecords": 10,
                 "ignoreUnknownValues": True,
                 **self.additional_bq_parameters,
             },
