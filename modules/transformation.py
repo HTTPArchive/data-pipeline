@@ -85,6 +85,7 @@ class WriteBigQuery(beam.PTransform):
             "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
             "write_disposition": BigQueryDisposition.WRITE_APPEND,
             "additional_bq_parameters": {
+                "maxBadRecords": 10,
                 "ignoreUnknownValues": True,
                 **self.additional_bq_parameters,
             },
@@ -176,7 +177,7 @@ class HarJsonToSummary:
         entries, first_url, first_html_url = HarJsonToSummary.import_entries(
             log["entries"], status_info
         )
-        if not entries:
+        if not entries or entries == [None]:
             logging.warning(f"import_entries() failed for status_info:{status_info}")
             return None, None
         else:
@@ -193,6 +194,9 @@ class HarJsonToSummary:
 
         utils.clamp_integers(page, utils.int_columns_for_schema("pages"))
         for entry in entries:
+            if not entry:
+                logging.warning("Empty entry")
+                continue
             utils.clamp_integers(entry, utils.int_columns_for_schema("requests"))
 
         return page, entries
@@ -205,6 +209,9 @@ class HarJsonToSummary:
         entry_number = 0
 
         for entry in entries:
+            if not entry:
+                logging.warning(f"Empty entry, status_info:{status_info}")
+                continue
             try:
                 (
                     request,
@@ -501,6 +508,9 @@ class HarJsonToSummary:
 
     @staticmethod
     def aggregate_stats(entries, first_url, first_html_url, status_info):
+        if not entries or entries == [None]:
+            logging.error(f"No entries found. status_info={status_info}")
+            return None
         if not first_url:
             logging.error(f"No first URL found. status_info={status_info}")
             return None
@@ -556,6 +566,9 @@ class HarJsonToSummary:
         ) = num_errors = num_glibs = num_https = num_compressed = max_domain_reqs = 0
 
         for entry in entries:
+            if not entry:
+                logging.warning(f"Empty entry, status_info:{status_info}")
+                continue
             url = entry["urlShort"]
             pretty_type = entry["type"]
             resp_size = int(entry["respSize"])
