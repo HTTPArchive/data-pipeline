@@ -79,6 +79,7 @@ class Test(TestCase):
             ("flv", "video"),
             ("html", "html"),
             ("htm", "html"),
+            ("wasm", "wasm"),
         ]
 
         for given, expect in tests:
