@@ -118,20 +118,21 @@ class WriteToFirestoreBatchedDoFn(beam.DoFn):
         self.batch.commit(timeout=self.batch_timeout)
 
 
-class WriteToFirestoreDoFn(beam.DoFn):
-    """Write a single element to Firestore."""
-    def __init__(self, project, collection):
-        self.client = None
-        self.project = project
-        self.collection = collection
+# commented out for testing later - need to compare performance between batched and individual writes
+# class WriteToFirestoreDoFn(beam.DoFn):
+#     """Write a single element to Firestore."""
+#     def __init__(self, project, collection):
+#         self.client = None
+#         self.project = project
+#         self.collection = collection
 
-    def start_bundle(self):
-        # initialize client if it doesn't exist
-        if self.client is None:
-            self.client = firestore.Client(project=self.project)
+#     def start_bundle(self):
+#         # initialize client if it doesn't exist
+#         if self.client is None:
+#             self.client = firestore.Client(project=self.project)
 
-    def process(self, element):
-        self.client.write_data(element)
+#     def process(self, element):
+#         self.client.write_data(element)
 
 
 def parse_arguments(argv):
@@ -190,8 +191,6 @@ def create_pipeline(argv=None, save_main_session=True):
     # add group by to query
     query = f"{query} GROUP BY date, app, rank, geo"
 
-    # testing query
-    # query = "SELECT 1 AS test, 2 AS test2"
     logging.info(query)
 
     pipeline_options = PipelineOptions(pipeline_args)
@@ -223,5 +222,7 @@ if __name__ == '__main__':
     logging.debug("Pipeline created")
     result = p.run()
     logging.debug("Pipeline run")
+
+    # commented out for local testing
     # if not isinstance(p.runner, DataflowRunner):
     #     result.wait_until_finish()
