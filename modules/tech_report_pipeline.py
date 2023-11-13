@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from decimal import Decimal
+from distutils.command import build
 from sys import argv
 import uuid
 import apache_beam as beam
@@ -9,70 +10,33 @@ from google.cloud import firestore
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 import logging
 import argparse
+from constants import TECHNOLOGY_QUERIES
 
 # Inspired by https://stackoverflow.com/a/67028348
 
 
-DEFAULT_QUERY = """
-    CREATE TEMPORARY FUNCTION GET_LIGHTHOUSE(
-        records ARRAY<STRUCT<
-            client STRING,
-            median_lighthouse_score_accessibility NUMERIC,
-            median_lighthouse_score_best_practices NUMERIC,
-            median_lighthouse_score_performance NUMERIC,
-            median_lighthouse_score_pwa NUMERIC,
-            median_lighthouse_score_seo NUMERIC
-    >>
-    ) RETURNS ARRAY<STRUCT<
-    name STRING,
-    desktop STRUCT<
-        median_score NUMERIC
-    >,
-    mobile STRUCT<
-        median_score NUMERIC
-    >
-    >> LANGUAGE js AS '''
-    const METRIC_MAP = {
-        accessibility: 'median_lighthouse_score_accessibility',
-        best_practices: 'median_lighthouse_score_best_practices',
-        performance: 'median_lighthouse_score_performance',
-        pwa: 'median_lighthouse_score_pwa',
-        seo: 'median_lighthouse_score_seo',
-    };
+def buildQuery(start_date, end_date, query_type):
+    if query_type not in TECHNOLOGY_QUERIES:
+        raise ValueError(f"Query type {query_type} not found in TECHNOLOGY_QUERIES")
 
-    // Initialize the Lighthouse map.
-    const lighthouse = Object.fromEntries(Object.keys(METRIC_MAP).map(metricName => {
-        return [metricName, {name: metricName}];
-    }));
+    query = TECHNOLOGY_QUERIES[query_type]
 
-    // Populate each client record.
-    records.forEach(record => {
-        Object.entries(METRIC_MAP).forEach(([metricName, median_score]) => {
-            lighthouse[metricName][record.client] = {median_score: record[median_score]};
-        });
-    });
+    # add dates to query
+    if start_date and not end_date:
+        query = f"{query} WHERE date >= '{start_date}'"
+    elif not start_date and end_date:
+        query = f"{query} WHERE date <= '{end_date}'"
+    elif start_date and end_date:
+        query = f"{query} WHERE date BETWEEN '{start_date}' AND '{end_date}'"
+    else:
+        query = query
 
-    return Object.values(lighthouse);
-    ''';
+    # add group by to query
+    query = f"{query} GROUP BY date, app, rank, geo"
 
-    SELECT
-        STRING(DATE(date)) as date,
-        app AS technology,
-        rank,
-        geo,
-        GET_LIGHTHOUSE(ARRAY_AGG(STRUCT(
-            client,
-            median_lighthouse_score_accessibility,
-            median_lighthouse_score_best_practices,
-            median_lighthouse_score_performance,
-            median_lighthouse_score_pwa,
-            median_lighthouse_score_seo
+    logging.info(query)
 
-        ))) AS lighthouse
-    FROM
-        `httparchive.core_web_vitals.technologies`
-    
-    """
+    return query
 
 
 def convert_decimal_to_float(data):
@@ -94,8 +58,9 @@ def convert_decimal_to_float(data):
 
 class WriteToFirestoreBatchedDoFn(beam.DoFn):
     """Write a batch of elements to Firestore."""
-    def __init__(self, project, collection, batch_timeout=14400):
+    def __init__(self, database, project, collection, batch_timeout=14400):
         self.client = None
+        self.database = database
         self.project = project
         self.collection = collection
         self.batch_timeout = batch_timeout
@@ -103,7 +68,7 @@ class WriteToFirestoreBatchedDoFn(beam.DoFn):
     def start_bundle(self):
         # initialize client if it doesn't exist and create a collection reference
         if self.client is None:
-            self.client = firestore.Client(project=self.project)
+            self.client = firestore.Client(project=self.project, database=self.database)
             self.collection_ref = self.client.collection(self.collection)
 
         # create a batch
@@ -139,6 +104,14 @@ def parse_arguments(argv):
     """Parse command line arguments for the beam pipeline."""
     parser = argparse.ArgumentParser()
 
+    # Query type
+    parser.add_argument(
+        '--query_type',
+        dest='query_type',
+        help='Query type',
+        required=True,
+        choices=TECHNOLOGY_QUERIES.keys())
+
     # Firestore project
     parser.add_argument(
         '--firestore_project',
@@ -153,6 +126,14 @@ def parse_arguments(argv):
         dest='firestore_collection',
         default='lighthouse',
         help='Firestore collection',
+        required=True)
+
+    # Firestore database
+    parser.add_argument(
+        '--firestore_database',
+        dest='firestore_database',
+        default='(default)',
+        help='Firestore database',
         required=True)
 
     # start date, optional
@@ -178,20 +159,7 @@ def create_pipeline(argv=None, save_main_session=True):
     """Build the pipeline."""
     known_args, pipeline_args = parse_arguments(argv)
 
-    # add dates to query
-    if known_args.start_date and not known_args.end_date:
-        query = f"{DEFAULT_QUERY} WHERE date >= '{known_args.start_date}'"
-    elif not known_args.start_date and known_args.end_date:
-        query = f"{DEFAULT_QUERY} WHERE date <= '{known_args.end_date}'"
-    elif known_args.start_date and known_args.end_date:
-        query = f"{DEFAULT_QUERY} WHERE date BETWEEN '{known_args.start_date}' AND '{known_args.end_date}'"
-    else:
-        query = DEFAULT_QUERY
-
-    # add group by to query
-    query = f"{query} GROUP BY date, app, rank, geo"
-
-    logging.info(query)
+    query = buildQuery(known_args.start_date, known_args.end_date, known_args.query_type)
 
     pipeline_options = PipelineOptions(pipeline_args)
 
@@ -208,6 +176,7 @@ def create_pipeline(argv=None, save_main_session=True):
         | 'ConvertDecimalToFloat' >> beam.Map(convert_decimal_to_float)
         | 'GroupIntoBatches' >> beam.BatchElements(min_batch_size=50, max_batch_size=50)
         | 'WriteToFirestoreBatched' >> beam.ParDo(WriteToFirestoreBatchedDoFn(
+            database=known_args.firestore_database,
             project=known_args.firestore_project,
             collection=known_args.firestore_collection
         ))
