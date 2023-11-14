@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 
-from decimal import Decimal
-from distutils.command import build
 from sys import argv
-import uuid
 import apache_beam as beam
-from apache_beam.runners.dataflow.dataflow_runner import DataflowRunner
 from google.cloud import firestore
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 import logging
@@ -29,43 +25,6 @@ class QueryFirestoreDoFn(beam.DoFn):
 
         for doc in docs:
             yield doc.id
-
-
-class DeleteFromFirestoreBatchedDoFn(beam.DoFn):
-    """Write a batch of elements to Firestore."""
-    def __init__(self, database, project, collection, batch_timeout=14400, batch_size=2000):
-        self.client = None
-        self.database = database
-        self.project = project
-        self.collection = collection
-        self.batch_timeout = batch_timeout
-        self.batch_size = batch_size
-
-    def start_bundle(self):
-        # initialize client if it doesn't exist and create a collection reference
-        if self.client is None:
-            self.client = firestore.Client(project=self.project, database=self.database)
-            self.collection_ref = self.client.collection(self.collection)
-
-        # create a batch
-        self.batch = self.client.batch()
-
-    def process(self, elements):
-        count = 0
-
-        for doc in elements:
-            self.batch.delete(doc.reference)
-            count += 1
-
-            # Commit the batch every N documents
-            if count % self.batch_size == 0:
-                self.batch.commit()
-                self.batch = self.client.batch()
-
-        # Commit the last batch
-        if count % self.batch_size != 0:
-            self.batch.commit()
-            logging.info("Bach deleted")
 
 
 class DeleteFromFirestoreDoFn(beam.DoFn):
@@ -156,7 +115,7 @@ def create_pipeline(argv=None, save_main_session=True):
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
     (p
         | 'Create' >> beam.Create([known_args.firestore_collection])
-        | 'QueryFirestoreDoFn' >> beam.ParDo(QueryFirestoreDoFn(
+        | 'QueryFirestore' >> beam.ParDo(QueryFirestoreDoFn(
             database=known_args.firestore_database,
             project=known_args.firestore_project
         ))
