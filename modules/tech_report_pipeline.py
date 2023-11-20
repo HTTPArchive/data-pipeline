@@ -1,42 +1,51 @@
 #!/usr/bin/env python3
 
 from decimal import Decimal
-from distutils.command import build
+import hashlib
 from sys import argv
-import uuid
 import apache_beam as beam
-from apache_beam.runners.dataflow.dataflow_runner import DataflowRunner
+from apache_beam.utils import retry
 from google.cloud import firestore
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 import logging
 import argparse
-from constants import TECHNOLOGY_QUERIES
+from modules import constants
 
 # Inspired by https://stackoverflow.com/a/67028348
 
 
-def buildQuery(start_date, end_date, query_type):
-    if query_type not in TECHNOLOGY_QUERIES:
+def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOLOGY_QUERY_ID_KEYS):
+    """Returns a hashed id for a set of technology query keys"""
+    if query_type not in key_map:
+        raise ValueError(f"Invalid query type: {query_type}")
+    keys = key_map[query_type]
+    values = [element.get(key) for key in keys]
+    hash = hashlib.sha256("-".join(values).encode()).hexdigest()
+    return hash
+
+
+def build_query(query_type):
+    if query_type not in constants.TECHNOLOGY_QUERIES:
         raise ValueError(f"Query type {query_type} not found in TECHNOLOGY_QUERIES")
-
-    query = TECHNOLOGY_QUERIES[query_type]
-
-    # add dates to query
-    if start_date and not end_date:
-        query = f"{query} WHERE date >= '{start_date}'"
-    elif not start_date and end_date:
-        query = f"{query} WHERE date <= '{end_date}'"
-    elif start_date and end_date:
-        query = f"{query} WHERE date BETWEEN '{start_date}' AND '{end_date}'"
-    else:
-        query = query
-
-    # add group by to query
-    query = f"{query} GROUP BY date, app, rank, geo"
-
+    query = constants.TECHNOLOGY_QUERIES[query_type]
     logging.info(query)
-
     return query
+
+
+def filter_dates(row, start_date, end_date):
+    """Filter rows between start and end date"""
+    if not start_date and not end_date:
+        return True
+    elif 'date' not in row:
+        return True
+    elif start_date and end_date:
+        return start_date <= row['date'] <= end_date
+    elif start_date:
+        return start_date <= row['date']
+    elif end_date:
+        return row['date'] <= end_date
+    else:
+        return True
 
 
 def convert_decimal_to_float(data):
@@ -56,14 +65,14 @@ def convert_decimal_to_float(data):
         return data
 
 
-class WriteToFirestoreBatchedDoFn(beam.DoFn):
-    """Write a batch of elements to Firestore."""
-    def __init__(self, database, project, collection, batch_timeout=14400):
+class WriteToFirestoreDoFn(beam.DoFn):
+    """Write a single element to Firestore. Retry on failure using exponential backoff, see :func:`apache_beam.utils.retry.with_exponential_backoff`."""
+    def __init__(self, project, database, collection, query_type):
         self.client = None
-        self.database = database
         self.project = project
+        self.database = database
         self.collection = collection
-        self.batch_timeout = batch_timeout
+        self.query_type = query_type
 
     def start_bundle(self):
         # initialize client if it doesn't exist and create a collection reference
@@ -71,97 +80,81 @@ class WriteToFirestoreBatchedDoFn(beam.DoFn):
             self.client = firestore.Client(project=self.project, database=self.database)
             self.collection_ref = self.client.collection(self.collection)
 
-        # create a batch
-        self.batch = self.client.batch()
+    def process(self, element):
+        # creates a hash id for the document
+        hash_id = technology_hash_id(element, self.query_type)
+        self._add_record(hash_id, element)
 
-    def process(self, elements):
-        for element in elements:
-            doc_ref = self.collection_ref.document(uuid.uuid4().hex)
-            self.batch.set(doc_ref, element)
-
-        # commit the batch with a timeout
-        self.batch.commit(timeout=self.batch_timeout)
-
-
-# commented out for testing later - need to compare performance between batched and individual writes
-# class WriteToFirestoreDoFn(beam.DoFn):
-#     """Write a single element to Firestore."""
-#     def __init__(self, project, collection):
-#         self.client = None
-#         self.project = project
-#         self.collection = collection
-
-#     def start_bundle(self):
-#         # initialize client if it doesn't exist
-#         if self.client is None:
-#             self.client = firestore.Client(project=self.project)
-
-#     def process(self, element):
-#         self.client.write_data(element)
+    @retry.with_exponential_backoff()
+    def _add_record(self, id, data):
+        doc_ref = self.collection_ref.document(id)
+        doc_ref.set(data)
 
 
-def parse_arguments(argv):
-    """Parse command line arguments for the beam pipeline."""
-    parser = argparse.ArgumentParser()
+class TechReportPipelineOptions(PipelineOptions):
+    @classmethod
+    def _add_argparse_args(cls, parser):
+        # Query type
+        parser.add_argument(
+            '--query_type',
+            dest='query_type',
+            help='Query type',
+            required=True,
+            choices=constants.TECHNOLOGY_QUERIES.keys())
 
-    # Query type
-    parser.add_argument(
-        '--query_type',
-        dest='query_type',
-        help='Query type',
-        required=True,
-        choices=TECHNOLOGY_QUERIES.keys())
+        # Firestore project
+        parser.add_argument(
+            '--firestore_project',
+            dest='firestore_project',
+            default='httparchive',
+            help='Firestore project',
+            required=True)
 
-    # Firestore project
-    parser.add_argument(
-        '--firestore_project',
-        dest='firestore_project',
-        default='httparchive',
-        help='Firestore project',
-        required=True)
+        # Firestore collection
+        parser.add_argument(
+            '--firestore_collection',
+            dest='firestore_collection',
+            help='Firestore collection',
+            required=True)
 
-    # Firestore collection
-    parser.add_argument(
-        '--firestore_collection',
-        dest='firestore_collection',
-        default='lighthouse',
-        help='Firestore collection',
-        required=True)
+        # Firestore database
+        parser.add_argument(
+            '--firestore_database',
+            dest='firestore_database',
+            default='(default)',
+            help='Firestore database',
+            required=True)
 
-    # Firestore database
-    parser.add_argument(
-        '--firestore_database',
-        dest='firestore_database',
-        default='(default)',
-        help='Firestore database',
-        required=True)
+        # start date, optional
+        parser.add_argument(
+            '--start_date',
+            dest='start_date',
+            help='Start date',
+            required=False)
 
-    # start date, optional
-    parser.add_argument(
-        '--start_date',
-        dest='start_date',
-        help='Start date',
-        required=False)
-
-    # end date, optional
-    parser.add_argument(
-        '--end_date',
-        dest='end_date',
-        help='End date',
-        required=False)
-
-    # parse arguments
-    known_args, pipeline_args = parser.parse_known_args(argv)
-    return known_args, pipeline_args
+        # end date, optional
+        parser.add_argument(
+            '--end_date',
+            dest='end_date',
+            help='End date',
+            required=False)
 
 
 def create_pipeline(argv=None, save_main_session=True):
     """Build the pipeline."""
-    known_args, pipeline_args = parse_arguments(argv)
 
-    query = buildQuery(known_args.start_date, known_args.end_date, known_args.query_type)
+    parser = argparse.ArgumentParser()
+    known_args, beam_args = parser.parse_known_args()
 
-    pipeline_options = PipelineOptions(pipeline_args)
+    # Create and set your Pipeline Options.
+    beam_options = PipelineOptions(beam_args)
+    known_args = beam_options.view_as(TechReportPipelineOptions)
+
+    query = build_query(known_args.query_type)
+
+    pipeline_options = PipelineOptions(beam_options)
+
+    logging.info(f"Pipeline options: {pipeline_options.get_all_options()}")
 
     # We use the save_main_session option because one or more DoFn's in this
     # workflow rely on global context (e.g., a module imported at module level)
@@ -173,12 +166,13 @@ def create_pipeline(argv=None, save_main_session=True):
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
     (p
         | 'ReadFromBigQuery' >> beam.io.ReadFromBigQuery(query=query, use_standard_sql=True)
+        | 'FilterDates' >> beam.Filter(lambda row: filter_dates(row, known_args.start_date, known_args.end_date))
         | 'ConvertDecimalToFloat' >> beam.Map(convert_decimal_to_float)
-        | 'GroupIntoBatches' >> beam.BatchElements(min_batch_size=50, max_batch_size=50)
-        | 'WriteToFirestoreBatched' >> beam.ParDo(WriteToFirestoreBatchedDoFn(
-            database=known_args.firestore_database,
+        | 'WriteToFirestore' >> beam.ParDo(WriteToFirestoreDoFn(
             project=known_args.firestore_project,
-            collection=known_args.firestore_collection
+            database=known_args.firestore_database,
+            collection=known_args.firestore_collection,
+            query_type=known_args.query_type
         ))
     )
 
