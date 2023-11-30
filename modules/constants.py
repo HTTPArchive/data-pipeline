@@ -104,14 +104,13 @@ class MaxContentSize(Enum):
     # limit response bodies to 20MB
     RESPONSE_BODIES = 20 * 1000000
 
-
 TECHNOLOGY_QUERY_ID_KEYS = {
-    "adoption": ["date", "technology", "rank", "geo"],
-    "lighthouse": ["date", "technology", "rank", "geo"],
-    "core_web_vitals": ["date", "technology", "rank", "geo"],
-    "technologies": ["client", "technology", "category"],
-    "page_weight": ["date", "technology", "geo"],
-    "categories": ["category"],
+    "adoption":        ["date", "technology", "geo", "rank"],
+    "lighthouse":      ["date", "technology", "geo", "rank"],
+    "core_web_vitals": ["date", "technology", "geo", "rank"],
+    "page_weight":     ["date", "technology", "geo", "rank"],
+    "technologies":    ["client", "technology", "category"],
+    "categories":      ["category"],
 }
 """Mapping of query types to a list of fields that uniquely identify a row."""
 
@@ -304,17 +303,52 @@ TECHNOLOGY_QUERIES = {
         ORDER BY origins DESC
     """,
     "page_weight": """
+        CREATE TEMPORARY FUNCTION GET_PAGE_WEIGHT(
+        records ARRAY<STRUCT<
+            client STRING,
+            total INT64,
+            js INT64,
+            images INT64
+        >>
+        ) RETURNS ARRAY<STRUCT<
+        name STRING,
+        mobile STRUCT<
+            median_bytes INT64
+        >,
+        desktop STRUCT<
+            median_bytes INT64
+        >
+        >> LANGUAGE js AS '''
+        const METRICS = ['total', 'js', 'images'];
+
+        // Initialize the page weight map.
+        const pageWeight = Object.fromEntries(METRICS.map(metricName => {
+        return [metricName, {name: metricName}];
+        }));
+
+        // Populate each client record.
+        records.forEach(record => {
+        METRICS.forEach(metricName => {
+            pageWeight[metricName][record.client] = {median_bytes: record[metricName]};
+        });
+        });
+
+        return Object.values(pageWeight);
+        ''';
+
         SELECT
-            STRING(DATE(date)) as date,
-            app AS technology,
-            rank,
-            geo,
+        date,
+        app AS technology,
+        rank,
+        geo,
+        GET_PAGE_WEIGHT(ARRAY_AGG(STRUCT(
             client,
             median_bytes_total,
             median_bytes_js,
             median_bytes_image
+        ))) AS pageWeight
         FROM
-            `httparchive.core_web_vitals.technologies`
+        `httparchive.core_web_vitals.technologies`
     """,
     "categories": """
         WITH categories AS (

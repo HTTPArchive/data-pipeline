@@ -181,7 +181,6 @@ TECHNOLOGY_QUERIES = {
             ))) AS vitals
         FROM
             `httparchive.core_web_vitals.technologies`
-        
     """,
     "technologies": """
         SELECT
@@ -199,15 +198,50 @@ TECHNOLOGY_QUERIES = {
             app = technology
   """,
   "page_weight": """
+        CREATE TEMPORARY FUNCTION GET_PAGE_WEIGHT(
+            records ARRAY<STRUCT<
+                client STRING,
+                total INT64,
+                js INT64,
+                images INT64
+            >>
+        ) RETURNS ARRAY<STRUCT<
+            name STRING,
+            mobile STRUCT<
+                median_bytes INT64
+            >,
+            desktop STRUCT<
+                median_bytes INT64
+            >
+        >> LANGUAGE js AS '''
+        const METRICS = ['total', 'js', 'images'];
+
+        // Initialize the page weight map.
+        const pageWeight = Object.fromEntries(METRICS.map(metricName => {
+        return [metricName, {name: metricName}];
+        }));
+
+        // Populate each client record.
+        records.forEach(record => {
+            METRICS.forEach(metricName => {
+                pageWeight[metricName][record.client] = {median_bytes: record[metricName]};
+            });
+        });
+
+        return Object.values(pageWeight);
+        ''';
+
         SELECT
             STRING(DATE(date)) as date,
             app AS technology,
             rank,
             geo,
-            client,
-            median_bytes_total,
-            median_bytes_js,
-            median_bytes_image
+            GET_PAGE_WEIGHT(ARRAY_AGG(STRUCT(
+                client,
+                median_bytes_total,
+                median_bytes_js,
+                median_bytes_image
+            ))) AS pageWeight
         FROM
             `httparchive.core_web_vitals.technologies`
     """,
@@ -268,7 +302,7 @@ def buildQuery(start_date, end_date, query_type):
 
     query = TECHNOLOGY_QUERIES[query_type]
 
-    if query_type != "technologies" and query_type != "page_weight":
+    if query_type != "technologies":
         # add dates to query
         if start_date and not end_date:
             query = f"{query} WHERE date >= '{start_date}'"
@@ -279,7 +313,7 @@ def buildQuery(start_date, end_date, query_type):
         else:
             query = query
 
-    if query_type == "adoption" or query_type == "lighthouse" or query_type == "core_web_vitals":
+    if query_type == "adoption" or query_type == "lighthouse" or query_type == "core_web_vitals" or query_type == "page_weight":
         query = f"{query} GROUP BY date, app, rank, geo"
 
     if query_type == "technologies":
@@ -309,15 +343,12 @@ def convert_decimal_to_float(data):
 
 def create_hash_id(element, query_type):
 
-    if query_type == "adoption" or query_type == "lighthouse" or query_type == "core_web_vitals":
+    if query_type == "adoption" or query_type == "lighthouse" or query_type == "core_web_vitals" or query_type == "page_weight":
         id = (element['date'] + "-" + element['technology'] + "-" + element['geo'] + "-" + element['rank']).encode('utf-8')
 
     if query_type == "technologies":
         id = (element['client'] + "-" + element['technology']  + "-" + element['category']).encode('utf-8')
 
-    if query_type == "page_weight":
-        id = (element['date'] + "-" + element['technology'] + "-" + element['geo'] + "-" + element['rank'] + "-" + element['client']).encode('utf-8')
-    
     if query_type == "categories":
         id = (element['category']).encode('utf-8')
         
