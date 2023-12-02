@@ -24,10 +24,10 @@ def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOL
     return hash
 
 
-def build_query(query_type):
-    if query_type not in constants.TECHNOLOGY_QUERIES:
+def build_query(query_type, queries=constants.TECHNOLOGY_QUERIES):
+    if query_type not in queries:
         raise ValueError(f"Query type {query_type} not found in TECHNOLOGY_QUERIES")
-    query = constants.TECHNOLOGY_QUERIES[query_type]
+    query = queries[query_type]
     logging.info(query)
     return query
 
