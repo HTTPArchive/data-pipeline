@@ -66,7 +66,7 @@ def convert_decimal_to_float(data):
 
 
 class WriteToFirestoreDoFn(beam.DoFn):
-    """Write a single element to Firestore. Retry on failure using exponential backoff, see :func:`apache_beam.utils.retry.with_exponential_backoff`."""
+    """Write a single element to Firestore. Yields the hash id of the document. Retry on failure using exponential backoff, see :func:`apache_beam.utils.retry.with_exponential_backoff`."""
     def __init__(self, project, database, collection, query_type):
         self.client = None
         self.project = project
@@ -84,9 +84,11 @@ class WriteToFirestoreDoFn(beam.DoFn):
         # creates a hash id for the document
         hash_id = technology_hash_id(element, self.query_type)
         self._add_record(hash_id, element)
+        yield hash_id
 
-    @retry.with_exponential_backoff()
+    @retry.with_exponential_backoff(retry_filter=lambda ex: isinstance(ex, Exception))
     def _add_record(self, id, data):
+        """Helper function to add a record to Firestore. Retries on any `Exception`."""
         doc_ref = self.collection_ref.document(id)
         doc_ref.set(data)
 
