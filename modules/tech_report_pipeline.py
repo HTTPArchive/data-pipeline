@@ -154,16 +154,13 @@ def create_pipeline(argv=None, save_main_session=True):
 
     query = build_query(known_args.query_type)
 
-    pipeline_options = PipelineOptions(beam_options)
-
-    logging.info(f"Pipeline options: {pipeline_options.get_all_options()}")
+    logging.info(f"Pipeline options: {beam_options.get_all_options()}")
 
     # We use the save_main_session option because one or more DoFn's in this
     # workflow rely on global context (e.g., a module imported at module level)
-    pipeline_options.view_as(SetupOptions).save_main_session = save_main_session
+    beam_options.view_as(SetupOptions).save_main_session = save_main_session
 
-    # with beam.Pipeline(options=pipeline_options) as p:
-    p = beam.Pipeline(options=pipeline_options)
+    p = beam.Pipeline(options=beam_options)
 
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
     (p
