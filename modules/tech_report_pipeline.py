@@ -15,10 +15,10 @@ from modules import constants
 
 
 def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOLOGY_QUERY_ID_KEYS):
-    """Returns a hashed id for a set of technology query keys"""
+    """Returns a hashed id for a set of technology query keys. Keys are sorted alphabetically and joined with a dash. The resulting string is hashed using SHA256."""
     if query_type not in key_map:
         raise ValueError(f"Invalid query type: {query_type}")
-    keys = key_map[query_type]
+    keys = sorted(key_map[query_type])
     values = [element.get(key) for key in keys]
     hash = hashlib.sha256("-".join(values).encode()).hexdigest()
     return hash
