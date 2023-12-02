@@ -104,6 +104,7 @@ class MaxContentSize(Enum):
     # limit response bodies to 20MB
     RESPONSE_BODIES = 20 * 1000000
 
+
 TECHNOLOGY_QUERY_ID_KEYS = {
     "adoption":        ["date", "technology", "geo", "rank"],
     "lighthouse":      ["date", "technology", "geo", "rank"],
