@@ -305,20 +305,20 @@ TECHNOLOGY_QUERIES = {
     """,
     "page_weight": """
         CREATE TEMPORARY FUNCTION GET_PAGE_WEIGHT(
-        records ARRAY<STRUCT<
-            client STRING,
-            total INT64,
-            js INT64,
-            images INT64
-        >>
+            records ARRAY<STRUCT<
+                client STRING,
+                total INT64,
+                js INT64,
+                images INT64
+            >>
         ) RETURNS ARRAY<STRUCT<
-        name STRING,
-        mobile STRUCT<
-            median_bytes INT64
-        >,
-        desktop STRUCT<
-            median_bytes INT64
-        >
+            name STRING,
+            mobile STRUCT<
+                median_bytes INT64
+            >,
+            desktop STRUCT<
+                median_bytes INT64
+            >
         >> LANGUAGE js AS '''
         const METRICS = ['total', 'js', 'images'];
 
@@ -329,27 +329,28 @@ TECHNOLOGY_QUERIES = {
 
         // Populate each client record.
         records.forEach(record => {
-        METRICS.forEach(metricName => {
-            pageWeight[metricName][record.client] = {median_bytes: record[metricName]};
-        });
+            METRICS.forEach(metricName => {
+                pageWeight[metricName][record.client] = {median_bytes: record[metricName]};
+            });
         });
 
         return Object.values(pageWeight);
         ''';
 
         SELECT
-        date,
-        app AS technology,
-        rank,
-        geo,
-        GET_PAGE_WEIGHT(ARRAY_AGG(STRUCT(
-            client,
-            median_bytes_total,
-            median_bytes_js,
-            median_bytes_image
-        ))) AS pageWeight
+            STRING(DATE(date)) as date,
+            app AS technology,
+            rank,
+            geo,
+            GET_PAGE_WEIGHT(ARRAY_AGG(STRUCT(
+                client,
+                median_bytes_total,
+                median_bytes_js,
+                median_bytes_image
+            ))) AS pageWeight
         FROM
-        `httparchive.core_web_vitals.technologies`
+            `httparchive.core_web_vitals.technologies`
+        GROUP BY date, app, rank, geo
     """,
     "categories": """
         WITH categories AS (
