@@ -214,6 +214,10 @@ def create_pipeline(save_main_session=True):
         ))
     )
 
+    # if logging level is DEBUG, log results
+    if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
+        p = p | 'LogResults' >> beam.Map(logging.debug)
+
     return p
 
 
