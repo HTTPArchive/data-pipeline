@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import calendar
+from datetime import date
 from decimal import Decimal
 import hashlib
 from sys import argv
@@ -32,7 +34,41 @@ def build_query(query_type, queries=constants.TECHNOLOGY_QUERIES):
     return query
 
 
-def filter_dates(row, start_date, end_date):
+def filter_dates_by_query_type(query_type, row, start_date, end_date) -> bool:
+    """Filter rows by date. For some queries, use the latest month available. For others, use the date range specified by the user."""
+    if query_type in ["categories", "technologies"]:
+        return filter_by_month(row, start_date, end_date)
+    else:
+        return filter_by_dates(row, start_date, end_date)
+
+
+def filter_by_month(row, start_date, end_date) -> bool:
+    """Filter rows by date range if given, otherwise by current month. If start_date and end_date are given, use those. If only start_date is given, use the entire month. If only end_date is given, use the entire month. If neither are given, use the current month."""
+    if 'date' not in row:
+        return True
+
+    if start_date and end_date:
+        first = date.fromisoformat(start_date)
+        last = date.fromisoformat(end_date)
+    elif start_date:
+        first = date.fromisoformat(start_date).replace(day=1)
+        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    elif end_date:
+        last = date.fromisoformat(end_date)
+        first = last.replace(day=1)
+    else:
+        today = date.today()
+        first = today.replace(day=1)
+        last = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+
+    # if first and last are greater than one month apart, throw an error
+    if first.replace(day=1) != last.replace(day=1):
+        raise ValueError(f"Start and end dates must be within the same month. {start_date=}, {end_date=}")
+
+    return first <= row['date'] <= last
+
+
+def filter_by_dates(row, start_date, end_date) -> bool:
     """Filter rows between start and end date"""
     if not start_date and not end_date:
         return True
@@ -165,7 +201,7 @@ def create_pipeline(argv=None, save_main_session=True):
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
     (p
         | 'ReadFromBigQuery' >> beam.io.ReadFromBigQuery(query=query, use_standard_sql=True)
-        | 'FilterDates' >> beam.Filter(lambda row: filter_dates(row, known_args.start_date, known_args.end_date))
+        | 'FilterDates' >> beam.Filter(lambda row: filter_dates_by_query_type(known_args.query_type, row, known_args.start_date, known_args.end_date))
         | 'ConvertDecimalToFloat' >> beam.Map(convert_decimal_to_float)
         | 'WriteToFirestore' >> beam.ParDo(WriteToFirestoreDoFn(
             project=known_args.firestore_project,
