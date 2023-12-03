@@ -120,7 +120,7 @@ class WriteToFirestoreDoFn(beam.DoFn):
         # creates a hash id for the document
         hash_id = technology_hash_id(element, self.query_type)
         self._add_record(hash_id, element)
-        yield hash_id
+        yield hash_id, element
 
     @retry.with_exponential_backoff(retry_filter=lambda ex: isinstance(ex, Exception))
     def _add_record(self, id, data):
