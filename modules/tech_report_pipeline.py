@@ -4,7 +4,6 @@ import calendar
 from datetime import date
 from decimal import Decimal
 import hashlib
-from sys import argv
 import apache_beam as beam
 from apache_beam.utils import retry
 from google.cloud import firestore
@@ -178,15 +177,19 @@ class TechReportPipelineOptions(PipelineOptions):
             required=False)
 
 
-def create_pipeline(argv=None, save_main_session=True):
-    """Build the pipeline."""
-
+def parse_args():
     parser = argparse.ArgumentParser()
     known_args, beam_args = parser.parse_known_args()
 
     # Create and set your Pipeline Options.
     beam_options = PipelineOptions(beam_args)
     known_args = beam_options.view_as(TechReportPipelineOptions)
+    return known_args, beam_options
+
+
+def create_pipeline(save_main_session=True):
+    """Build the pipeline."""
+    known_args, beam_options = parse_args()
 
     query = build_query(known_args.query_type)
 
@@ -216,7 +219,7 @@ def create_pipeline(argv=None, save_main_session=True):
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
-    p = create_pipeline(argv)
+    p = create_pipeline()
     logging.debug("Pipeline created")
     result = p.run()
     logging.debug("Pipeline run")
