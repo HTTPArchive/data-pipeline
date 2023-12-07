@@ -292,6 +292,7 @@ TECHNOLOGY_QUERIES = {
             app AS technology,
             description,
             category,
+            SPLIT(category, ",") AS category_obj,
             NULL AS similar_technologies,
             origins
         FROM
