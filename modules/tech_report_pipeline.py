@@ -202,7 +202,8 @@ def create_pipeline(save_main_session=True):
     p = beam.Pipeline(options=beam_options)
 
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
-    (p
+    firestore_ids = (
+        p
         | 'ReadFromBigQuery' >> beam.io.ReadFromBigQuery(query=query, use_standard_sql=True)
         | 'FilterDates' >> beam.Filter(lambda row: filter_dates_by_query_type(known_args.query_type, row, known_args.start_date, known_args.end_date))
         | 'ConvertDecimalToFloat' >> beam.Map(convert_decimal_to_float)
@@ -216,7 +217,7 @@ def create_pipeline(save_main_session=True):
 
     # if logging level is DEBUG, log results
     if logging.getLogger().getEffectiveLevel() == logging.DEBUG:
-        p = p | 'LogResults' >> beam.Map(logging.debug)
+        firestore_ids | 'LogResults' >> beam.Map(logging.debug)
 
     return p
 
