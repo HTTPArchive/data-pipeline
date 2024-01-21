@@ -43,6 +43,7 @@ def get_ext(ext):
 
     return ret_ext
 
+
 # When adding to this make sure you also add to transformation.py aggregate_stats
 def pretty_type(mime_typ, ext):
     mime_typ = mime_typ.lower()
