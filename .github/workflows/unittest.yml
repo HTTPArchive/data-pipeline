@@ -35,7 +35,7 @@ jobs:
           COVERAGE_FILE: ".coverage.${{ matrix.python-version }}"
 
       - name: Store coverage file
-        uses: actions/upload-artifact@v3.1.2
+        uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: .coverage.${{ matrix.python-version }}
@@ -47,7 +47,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         id: download
         with:
           name: 'coverage'
@@ -60,7 +60,7 @@ jobs:
           MERGE_COVERAGE_FILES: true
 
       - name: Store Pull Request comment to be posted
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: steps.coverage_comment.outputs.COMMENT_FILE_WRITTEN == 'true'
         with:
           # If you use a different name, update COMMENT_ARTIFACT_NAME accordingly
