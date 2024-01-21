@@ -552,6 +552,7 @@ class HarJsonToSummary:
             "mp4",
             "flv",
             "f4v",
+            "wasm",
         ]
         # initialize the hashes
         for typ in typs:
