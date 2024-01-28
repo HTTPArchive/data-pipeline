@@ -10,7 +10,7 @@ on:
       - "cloudbuild.yaml"
       - "Dockerfile"
       - "flex_template_metadata_*.json"
-      - "requirements.txt"
+      - "requirements*.txt"
 
 jobs:
   deploy:
