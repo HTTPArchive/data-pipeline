@@ -136,9 +136,5 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     p = create_pipeline(argv)
     logging.debug("Pipeline created")
-    result = p.run()
+    p.run()
     logging.debug("Pipeline run")
-
-    # commented out for local testing
-    # if not isinstance(p.runner, DataflowRunner):
-    #     result.wait_until_finish()
