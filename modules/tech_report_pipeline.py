@@ -14,7 +14,8 @@ from modules import constants
 
 
 def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOLOGY_QUERY_ID_KEYS):
-    """Returns a hashed id for a set of technology query keys. Keys are sorted alphabetically and joined with a dash. The resulting string is hashed using SHA256."""
+    """Returns a hashed id for a set of technology query keys. Keys are sorted alphabetically and joined with a dash.
+    The resulting string is hashed using SHA256."""
     if query_type not in key_map:
         raise ValueError(f"Invalid query type: {query_type}")
     keys = sorted(key_map[query_type])
@@ -52,7 +53,8 @@ def convert_decimal_to_float(data):
 
 
 class WriteToFirestoreDoFn(beam.DoFn):
-    """Write a single element to Firestore. Yields the hash id of the document. Retry on failure using exponential backoff, see :func:`apache_beam.utils.retry.with_exponential_backoff`."""
+    """Write a single element to Firestore. Yields the hash id of the document.
+    Retry on failure using exponential backoff, see :func:`apache_beam.utils.retry.with_exponential_backoff`."""
     def __init__(self, project, database, collection, query_type):
         self.client = None
         self.project = project
