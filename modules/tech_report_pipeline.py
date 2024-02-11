@@ -20,6 +20,8 @@ def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOL
     if query_type not in key_map:
         raise ValueError(f"Invalid query type: {query_type}")
     keys = sorted(key_map[query_type])
+    if not all(key in element for key in keys):
+        raise ValueError(f"Missing keys in element {element} for query type {query_type}")
     values = [element.get(key) for key in keys]
     hash = hashlib.sha256("-".join(values).encode()).hexdigest()
     return hash
