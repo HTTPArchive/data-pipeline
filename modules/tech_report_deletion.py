@@ -113,7 +113,8 @@ def create_pipeline(argv=None, save_main_session=True):
     p = beam.Pipeline(options=pipeline_options)
 
     # Read from BigQuery, convert decimal to float, group into batches, and write to Firestore
-    (p
+    (
+        p
         | 'Create' >> beam.Create([known_args.firestore_collection])
         | 'QueryFirestore' >> beam.ParDo(QueryFirestoreDoFn(
             database=known_args.firestore_database,

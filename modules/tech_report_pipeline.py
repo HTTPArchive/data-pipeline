@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import calendar
-from datetime import date
 from decimal import Decimal
 import hashlib
 import apache_beam as beam

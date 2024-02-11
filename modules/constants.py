@@ -115,7 +115,7 @@ TECHNOLOGY_QUERY_ID_KEYS = {
 }
 """Mapping of query types to a list of fields that uniquely identify a row."""
 
-
+# editorconfig-checker-disable
 TECHNOLOGY_QUERIES = {
     "adoption": """
         CREATE TEMPORARY FUNCTION GET_ADOPTION(
@@ -408,3 +408,4 @@ TECHNOLOGY_QUERIES = {
   """
 }
 """Mapping of query types to BigQuery SQL queries."""
+# editorconfig-checker-enable

@@ -4,6 +4,7 @@ from unittest.mock import patch
 from modules.tech_report_pipeline import technology_hash_id
 from modules import constants
 
+
 class TestTechnologyHashId(unittest.TestCase):
     @patch('modules.tech_report_pipeline.constants')
     def test_technology_hash_id_valid(self, patched_constants):
@@ -28,6 +29,7 @@ class TestTechnologyHashId(unittest.TestCase):
         constants.TECHNOLOGY_QUERY_ID_KEYS[query_type] = ['key1', 'key2']
         with self.assertRaises(ValueError):
             technology_hash_id(element, query_type)
+
 
 if __name__ == '__main__':
     unittest.main()
