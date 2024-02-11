@@ -2,7 +2,7 @@
 
 from sys import argv
 import apache_beam as beam
-from google.cloud import firestore
+import google.cloud.firestore as firestore
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 import logging
 import argparse
