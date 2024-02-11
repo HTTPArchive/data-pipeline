@@ -143,6 +143,7 @@ TECHNOLOGY_QUERIES = {
             ))) AS adoption
         FROM
             `httparchive.core_web_vitals.technologies`
+        WHERE date = '{date}'
         GROUP BY date, app, rank, geo
         """,
     "lighthouse": """
@@ -203,6 +204,7 @@ TECHNOLOGY_QUERIES = {
             ))) AS lighthouse
         FROM
             `httparchive.core_web_vitals.technologies`
+        WHERE date = '{date}'
         GROUP BY date, app, rank, geo
     """,
     "core_web_vitals": """
@@ -284,6 +286,7 @@ TECHNOLOGY_QUERIES = {
             ))) AS vitals
         FROM
             `httparchive.core_web_vitals.technologies`
+        WHERE date = '{date}'
         GROUP BY date, app, rank, geo
     """,
     "technologies": """
@@ -301,7 +304,7 @@ TECHNOLOGY_QUERIES = {
             `httparchive.core_web_vitals.technology_descriptions`
         ON
             app = technology
-        WHERE date = '2023-07-01' AND geo = 'ALL' AND rank = 'ALL'
+        WHERE date = '{date}' AND geo = 'ALL' AND rank = 'ALL'
         ORDER BY origins DESC
     """,
     "page_weight": """
@@ -351,6 +354,7 @@ TECHNOLOGY_QUERIES = {
             ))) AS pageWeight
         FROM
             `httparchive.core_web_vitals.technologies`
+        WHERE date = '{date}'
         GROUP BY date, app, rank, geo
     """,
     "categories": """
@@ -363,7 +367,7 @@ TECHNOLOGY_QUERIES = {
                 UNNEST(technologies) AS t,
                 UNNEST(t.categories) AS category
             WHERE
-                date = '2023-08-01' AND
+                date = '{date}' AND
                 client = 'mobile'
             GROUP BY
                 category
@@ -379,7 +383,7 @@ TECHNOLOGY_QUERIES = {
                 UNNEST(technologies) AS t,
                 UNNEST(t.categories) AS category
             WHERE
-                date = '2023-08-01' AND
+                date = '{date}' AND
                 client = 'mobile'
             GROUP BY
                 category,

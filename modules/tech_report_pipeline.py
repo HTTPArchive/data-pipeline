@@ -25,62 +25,13 @@ def technology_hash_id(element: dict, query_type: str, key_map=constants.TECHNOL
     return hash
 
 
-def build_query(query_type, queries=constants.TECHNOLOGY_QUERIES):
+def build_query(query_type, date, queries=constants.TECHNOLOGY_QUERIES):
     if query_type not in queries:
         raise ValueError(f"Query type {query_type} not found in TECHNOLOGY_QUERIES")
     query = queries[query_type]
-    logging.info(query)
-    return query
-
-
-def filter_dates_by_query_type(query_type, row, start_date, end_date) -> bool:
-    """Filter rows by date. For some queries, use the latest month available. For others, use the date range specified by the user."""
-    if query_type in ["categories", "technologies"]:
-        return filter_by_month(row, start_date, end_date)
-    else:
-        return filter_by_dates(row, start_date, end_date)
-
-
-def filter_by_month(row, start_date, end_date) -> bool:
-    """Filter rows by date range if given, otherwise by current month. If start_date and end_date are given, use those. If only start_date is given, use the entire month. If only end_date is given, use the entire month. If neither are given, use the current month."""
-    if 'date' not in row:
-        return True
-
-    if start_date and end_date:
-        first = date.fromisoformat(start_date)
-        last = date.fromisoformat(end_date)
-    elif start_date:
-        first = date.fromisoformat(start_date).replace(day=1)
-        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
-    elif end_date:
-        last = date.fromisoformat(end_date)
-        first = last.replace(day=1)
-    else:
-        today = date.today()
-        first = today.replace(day=1)
-        last = today.replace(day=calendar.monthrange(today.year, today.month)[1])
-
-    # if first and last are greater than one month apart, throw an error
-    if first.replace(day=1) != last.replace(day=1):
-        raise ValueError(f"Start and end dates must be within the same month. {start_date=}, {end_date=}")
-
-    return first <= row['date'] <= last
-
-
-def filter_by_dates(row, start_date, end_date) -> bool:
-    """Filter rows between start and end date"""
-    if not start_date and not end_date:
-        return True
-    elif 'date' not in row:
-        return True
-    elif start_date and end_date:
-        return start_date <= row['date'] <= end_date
-    elif start_date:
-        return start_date <= row['date']
-    elif end_date:
-        return row['date'] <= end_date
-    else:
-        return True
+    parameterized_query = query.format(date=date)
+    logging.info(parameterized_query)
+    return parameterized_query
 
 
 def convert_decimal_to_float(data):
@@ -162,18 +113,11 @@ class TechReportPipelineOptions(PipelineOptions):
             help='Firestore database',
             required=True)
 
-        # start date, optional
+        # date
         parser.add_argument(
-            '--start_date',
-            dest='start_date',
-            help='Start date',
-            required=False)
-
-        # end date, optional
-        parser.add_argument(
-            '--end_date',
-            dest='end_date',
-            help='End date',
+            '--date',
+            dest='date',
+            help='Date',
             required=False)
 
 
@@ -191,7 +135,7 @@ def create_pipeline(save_main_session=True):
     """Build the pipeline."""
     known_args, beam_options = parse_args()
 
-    query = build_query(known_args.query_type)
+    query = build_query(known_args.query_type, known_args.date)
 
     logging.info(f"Pipeline options: {beam_options.get_all_options()}")
 
@@ -205,7 +149,6 @@ def create_pipeline(save_main_session=True):
     firestore_ids = (
         p
         | 'ReadFromBigQuery' >> beam.io.ReadFromBigQuery(query=query, use_standard_sql=True)
-        | 'FilterDates' >> beam.Filter(lambda row: filter_dates_by_query_type(known_args.query_type, row, known_args.start_date, known_args.end_date))
         | 'ConvertDecimalToFloat' >> beam.Map(convert_decimal_to_float)
         | 'WriteToFirestore' >> beam.ParDo(WriteToFirestoreDoFn(
             project=known_args.firestore_project,
