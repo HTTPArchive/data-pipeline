@@ -44,6 +44,7 @@ def get_ext(ext):
     return ret_ext
 
 
+# When adding to this make sure you also add to transformation.py aggregate_stats
 def pretty_type(mime_typ, ext):
     mime_typ = mime_typ.lower()
 
@@ -81,6 +82,8 @@ def pretty_type(mime_typ, ext):
         (typ for typ in ["flash", "webm", "mp4", "flv"] if typ in mime_typ), None
     ) or ext in ["mp4", "webm", "ts", "m4v", "m4s", "mov", "ogv", "swf", "f4v", "flv"]:
         return "video"
+    elif "wasm" in mime_typ or ext == "wasm":
+        return "wasm"
     elif "html" in mime_typ or ext in ["html", "htm"]:
         # Here is where we catch "text/html" mime type.
         return "html"
