@@ -34,7 +34,7 @@ jobs:
           pip install -r requirements.txt
       - name: Check library path
         run: |
-          python -c "import google.cloud firestore; print(firestore)"
+          python -c "from google.cloud import firestore; print(firestore)"
       - name: Set VALIDATE_ALL_CODEBASE variable to false
         # Only run the full workflow for manual runs or if upgrading the super linter
         if: |
