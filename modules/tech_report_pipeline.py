@@ -4,7 +4,7 @@ from decimal import Decimal
 import hashlib
 import apache_beam as beam
 from apache_beam.utils import retry
-from google.cloud import firestore # pylint: disable=import-error
+from google.cloud import firestore  # pylint: disable=import-error
 from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
 import logging
 import argparse
