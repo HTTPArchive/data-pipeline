@@ -23,18 +23,6 @@ jobs:
         with:
           # Full git history is needed to get a proper list of changed files within `super-linter`
           fetch-depth: 0
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.8
-          cache: 'pip'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Check library path
-        run: |
-          python -c "from google.cloud import firestore; print(firestore)"
       - name: Set VALIDATE_ALL_CODEBASE variable to false
         # Only run the full workflow for manual runs or if upgrading the super linter
         if: |
