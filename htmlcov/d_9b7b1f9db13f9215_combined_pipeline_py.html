@@ -76,8 +76,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="d_9b7b1f9db13f9215_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.4.0">coverage.py v7.4.0</a>,
-            created at 2024-01-21 12:18 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.4.3">coverage.py v7.4.3</a>,
+            created at 2024-03-01 07:41 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"/>
@@ -114,7 +114,7 @@
     <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t">            <span class="str">"--pipeline_type"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t">            <span class="nam">default</span><span class="op">=</span><span class="str">"combined"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t">            <span class="nam">choices</span><span class="op">=</span><span class="nam">pipeline_types</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t">            <span class="nam">help</span><span class="op">=</span><span class="str">f"Type of pipeline to run. One of {','.join(pipeline_types)}"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t23" href="#t23">23</a></span><span class="t">            <span class="nam">help</span><span class="op">=</span><span class="fst">f"</span><span class="fst">Type of pipeline to run. One of </span><span class="op">{</span><span class="str">','</span><span class="op">.</span><span class="nam">join</span><span class="op">(</span><span class="nam">pipeline_types</span><span class="op">)</span><span class="op">}</span><span class="fst">"</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t24" href="#t24">24</a></span><span class="t">        <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t">        <span class="nam">parser</span><span class="op">.</span><span class="nam">add_argument</span><span class="op">(</span>&nbsp;</span><input type="checkbox" id="ctxs26" /><span class="r"><label for="ctxs26" class="ctx">5 ctx</label></span><span class="ctxs">1bacde</span></p>
@@ -217,8 +217,8 @@
     <p class="run"><span class="n"><a id="t123" href="#t123">123</a></span><span class="t">    <span class="nam">standard_options</span> <span class="op">=</span> <span class="nam">pipeline_options</span><span class="op">.</span><span class="nam">view_as</span><span class="op">(</span><span class="nam">StandardOptions</span><span class="op">)</span>&nbsp;</span><input type="checkbox" id="ctxs123" /><span class="r"><label for="ctxs123" class="ctx">1 ctx</label></span><span class="ctxs">1a</span></p>
     <p class="run"><span class="n"><a id="t124" href="#t124">124</a></span><span class="t">    <span class="nam">combined_options</span> <span class="op">=</span> <span class="nam">pipeline_options</span><span class="op">.</span><span class="nam">view_as</span><span class="op">(</span><span class="nam">CombinedPipelineOptions</span><span class="op">)</span>&nbsp;</span><input type="checkbox" id="ctxs124" /><span class="r"><label for="ctxs124" class="ctx">1 ctx</label></span><span class="ctxs">1a</span></p>
     <p class="run"><span class="n"><a id="t125" href="#t125">125</a></span><span class="t">    <span class="nam">logging</span><span class="op">.</span><span class="nam">info</span><span class="op">(</span>&nbsp;</span><input type="checkbox" id="ctxs125" /><span class="r"><label for="ctxs125" class="ctx">1 ctx</label></span><span class="ctxs">1a</span></p>
-    <p class="pln"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">        <span class="str">f"Pipeline Options: {known_args=},{pipeline_args=},{pipeline_options.get_all_options()},"</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">        <span class="str">f"{standard_options},{combined_options}"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t126" href="#t126">126</a></span><span class="t">        <span class="fst">f"</span><span class="fst">Pipeline Options: </span><span class="op">{</span><span class="nam">known_args</span><span class="op">=</span><span class="op">}</span><span class="fst">,</span><span class="op">{</span><span class="nam">pipeline_args</span><span class="op">=</span><span class="op">}</span><span class="fst">,</span><span class="op">{</span><span class="nam">pipeline_options</span><span class="op">.</span><span class="nam">get_all_options</span><span class="op">(</span><span class="op">)</span><span class="op">}</span><span class="fst">,</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t127" href="#t127">127</a></span><span class="t">        <span class="fst">f"</span><span class="op">{</span><span class="nam">standard_options</span><span class="op">}</span><span class="fst">,</span><span class="op">{</span><span class="nam">combined_options</span><span class="op">}</span><span class="fst">"</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t128" href="#t128">128</a></span><span class="t">    <span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t129" href="#t129">129</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t130" href="#t130">130</a></span><span class="t">    <span class="com"># TODO add metric counters for files in, processed, written to GCP &amp; BQ</span>&nbsp;</span><span class="r"></span></p>
@@ -262,8 +262,8 @@
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
             <a id="nextFileLink" class="nav" href="d_9b7b1f9db13f9215_constants_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
-            <a class="nav" href="https://coverage.readthedocs.io/en/7.4.0">coverage.py v7.4.0</a>,
-            created at 2024-01-21 12:18 +0000
+            <a class="nav" href="https://coverage.readthedocs.io/en/7.4.3">coverage.py v7.4.3</a>,
+            created at 2024-03-01 07:41 +0000
         </p>
     </div>
 </footer>
