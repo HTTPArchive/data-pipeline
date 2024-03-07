@@ -443,9 +443,11 @@ def to_json(obj):
     if not obj:
         raise ValueError
 
-    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+    return (
+        json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
         .encode("utf-8", "surrogatepass")
         .decode("utf-8", "replace")
+    )
 
 
 def from_json(file_name, element):
