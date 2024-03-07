@@ -202,6 +202,12 @@ def get_response_bodies(har):
     """Parses response bodies from a HAR object."""
 
     page_url = get_page_url(har)
+    if not page_url:
+        logging.warning(
+            "Skipping response bodies: unable to get page URL (see preceding warning)."
+        )
+        return None
+
     requests = har.get("log").get("entries")
 
     response_bodies = []
@@ -247,6 +253,13 @@ def get_technologies(har):
 
     page = har.get("log").get("pages")[0]
     page_url = page.get("_URL")
+
+    if not page_url:
+        logging.warning(
+            "Skipping technologies: unable to get page URL (see preceding warning)."
+        )
+        return None
+
     app_names = page.get("_detected_apps", {})
     categories = page.get("_detected", {})
     metadata = get_metadata(har)
@@ -431,6 +444,8 @@ def to_json(obj):
         raise ValueError
 
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+        .encode("utf-8", "surrogatepass")
+        .decode("utf-8", "replace")
 
 
 def from_json(file_name, element):

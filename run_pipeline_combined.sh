@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1143,SC2211,SC2215
 python3 run_combined.py \
-  --input_file=gs://httparchive/crawls_manifest/chrome-Sep_1_2023.txt \
+  --input_file=gs://httparchive/crawls_manifest/chrome-Feb_1_2024.txt \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
