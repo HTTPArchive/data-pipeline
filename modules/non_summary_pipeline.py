@@ -12,7 +12,8 @@ import apache_beam as beam
 from modules import utils, constants, transformation
 
 # BigQuery can handle rows up to 100 MB.
-MAX_CONTENT_SIZE = 2 * 1024 * 1024
+MAX_CONTENT_SIZE = 100 * 1000000
+MAX_BODY_CONTENT_SIZE = 20 * 1000000
 # Number of times to partition the requests tables.
 NUM_PARTITIONS = 4
 
@@ -221,12 +222,13 @@ def get_response_bodies(har):
         if body is None:
             continue
 
-        truncated = len(body) > MAX_CONTENT_SIZE
+        truncated = len(body) > MAX_BODY_CONTENT_SIZE
         if truncated:
             logging.warning(
                 'Truncating response body for "%s". Response body size %s exceeds limit %s.'
-                % (request_url, len(body), MAX_CONTENT_SIZE)
+                % (request_url, len(body), MAX_BODY_CONTENT_SIZE)
             )
+            body = body[:MAX_BODY_CONTENT_SIZE]
 
         metadata = get_metadata(har)
 
@@ -234,7 +236,7 @@ def get_response_bodies(har):
             {
                 "page": page_url,
                 "url": request_url,
-                "body": body[:MAX_CONTENT_SIZE],
+                "body": body,
                 "truncated": truncated,
                 "date": har["date"],
                 "client": har["client"],

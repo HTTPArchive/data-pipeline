@@ -9,4 +9,4 @@ python run_all.py \
   --setup_file=./setup.py \
   --machine_type=n1-standard-32 \
   --worker_disk_type=compute.googleapis.com/projects//zones//diskTypes/pd-ssd \
-  --noauth_local_webserver
+  --max_cache_memory_usage_mb=0
