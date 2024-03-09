@@ -1,2 +1,0 @@
-black==23.7.0
-coverage>=6.4.4
