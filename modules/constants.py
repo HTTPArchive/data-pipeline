@@ -327,16 +327,16 @@ TECHNOLOGY_QUERIES = {
         const METRICS = ['total', 'js', 'images'];
 
         // Initialize the page weight map.
-        const pageWeight = Object.fromEntries(METRICS.map(metricName => {
-        return [metricName, {name: metricName}];
-        }));
+        const pageWeight = Object.fromEntries(METRICS.map(metricName => {{
+        return [metricName, {{name: metricName}}];
+        }}));
 
         // Populate each client record.
-        records.forEach(record => {
-            METRICS.forEach(metricName => {
-                pageWeight[metricName][record.client] = {median_bytes: record[metricName]};
-            });
-        });
+        records.forEach(record => {{
+            METRICS.forEach(metricName => {{
+                pageWeight[metricName][record.client] = {{median_bytes: record[metricName]}};
+            }});
+        }});
 
         return Object.values(pageWeight);
         ''';
