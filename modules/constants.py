@@ -127,9 +127,9 @@ TECHNOLOGY_QUERIES = {
             desktop INT64,
             mobile INT64
         > LANGUAGE js AS '''
-        return Object.fromEntries(records.map(({client, origins}) => {
+        return Object.fromEntries(records.map(({{client, origins}}) => {{
             return [client, origins];
-        }));
+        }}));
         ''';
 
         SELECT
