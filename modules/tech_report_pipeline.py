@@ -89,7 +89,7 @@ class TechReportPipelineOptions(PipelineOptions):
             '--query_type',
             dest='query_type',
             help='Query type',
-            required=True,
+            required=False,  # should be true
             choices=constants.TECHNOLOGY_QUERIES.keys())
 
         # Firestore project
@@ -98,14 +98,16 @@ class TechReportPipelineOptions(PipelineOptions):
             dest='firestore_project',
             default='httparchive',
             help='Firestore project',
-            required=True)
+            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            )
 
         # Firestore collection
         parser.add_argument(
             '--firestore_collection',
             dest='firestore_collection',
             help='Firestore collection',
-            required=True)
+            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            )
 
         # Firestore database
         parser.add_argument(
@@ -113,7 +115,8 @@ class TechReportPipelineOptions(PipelineOptions):
             dest='firestore_database',
             default='(default)',
             help='Firestore database',
-            required=True)
+            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            )
 
         # date
         parser.add_argument(
