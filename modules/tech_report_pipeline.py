@@ -98,7 +98,7 @@ class TechReportPipelineOptions(PipelineOptions):
             dest='firestore_project',
             default='httparchive',
             help='Firestore project',
-            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            required=False,  # should be `True` but fails since beam expects all pipelines to have the same options
             )
 
         # Firestore collection
@@ -106,7 +106,7 @@ class TechReportPipelineOptions(PipelineOptions):
             '--firestore_collection',
             dest='firestore_collection',
             help='Firestore collection',
-            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            required=False,  # should be `True` but fails since beam expects all pipelines to have the same options
             )
 
         # Firestore database
@@ -115,7 +115,7 @@ class TechReportPipelineOptions(PipelineOptions):
             dest='firestore_database',
             default='(default)',
             help='Firestore database',
-            required=False,  # should be `True` but fails due to the way beam expects all pipelines to have the same options
+            required=False,  # should be `True` but fails since beam expects all pipelines to have the same options
             )
 
         # date
