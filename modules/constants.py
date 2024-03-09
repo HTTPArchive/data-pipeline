@@ -407,5 +407,8 @@ TECHNOLOGY_QUERIES = {
             categories.origins DESC
   """
 }
-"""Mapping of query types to BigQuery SQL queries."""
+"""Mapping of query types to BigQuery SQL queries.
+ The queries are formatted with the `date` parameter.
+ Queries containing javascript UDFs require additional curly braces to escape the braces in the UDF.
+"""
 # editorconfig-checker-enable
