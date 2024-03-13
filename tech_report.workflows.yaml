@@ -1,0 +1,240 @@
+# name="tech_report-pipeline"
+# description="Runs the Tech Report data pipeline"
+
+main:
+    params: [event]
+    steps:
+        - logParams:
+              call: sys.log
+              args:
+                  data: ${event}
+                  severity: DEBUG
+
+        - getEventData:
+              call: decodePubSubEventData
+              args:
+                  event: ${event}
+              result: eventData
+        
+        - init:
+              assign:
+                  - checkIntervalSeconds: 300
+                  - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+                  - region: "us-west1"
+                  - scheduledQueryName: "projects/226352634162/locations/us/transferConfigs/65f3657e-0000-291b-8ebf-582429c88ba4"
+                  - flexTemplateRepo: "data-pipeline"
+                  - flexTemplateBuildTag: "2024-03-11_01-04-46"
+                  - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
+                  - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
+                  - runDate: "2024-01-01T00:00:00.00Z"
+                  - queryTypes: ["adoption", "lighthouse", "core_web_vitals"]
+                  - firestoreDatabase: "tech-report-apis-prod"
+
+        # run scheduled query
+        - startManualRuns:
+            call: googleapis.bigquerydatatransfer.v1.projects.locations.transferConfigs.startManualRuns
+            args:
+                parent: ${scheduledQueryName}
+                body:
+                    requestedRunTime: ${runDate}
+            result: startManualRunsResult
+
+        # iterate over technology query types and run flex template
+        - runDataflowJobs:
+            call: runDataflowJobs
+            args:
+                queryTypes: ${queryTypes}
+                runDate: ${runDate}
+                flexTemplateTemp: ${flexTemplateTemp}
+                flexTemplateBasePath: ${flexTemplateBasePath}
+                flexTemplateBuildTag: ${flexTemplateBuildTag}
+                project: ${project}
+                region: ${region}
+                firestoreDatabase: ${firestoreCollection}
+                firestoreCollection: ${queryType}
+                checkIntervalSeconds: ${checkIntervalSeconds}
+        
+
+### SUB-TASKS ###
+
+decodePubSubEventData:
+    params: [event]
+    steps:
+        - decode_pubsub_message:
+              assign:
+                  - base64: ${base64.decode(event.data.message.data)}
+                  - message: ${text.decode(base64)}
+        - return_pubsub_message:
+              return: ${message}
+
+runDataflowJobs:
+    params:
+        [
+            queryTypes,
+            runDate,
+            flexTemplateTemp,
+            flexTemplateBasePath,
+            flexTemplateBuildTag,
+            project,
+            region,
+            firestoreDatabase,
+            firestoreCollection,
+            checkIntervalSeconds,
+        ]
+    steps:
+        - iterateQueryTypes:
+              for:
+                  value: queryType
+                  in: ${queryTypes}
+                  steps:
+                      - startJob:
+                            try:
+                                steps:
+                                    - setJobName:
+                                          assign:
+                                              # yamllint disable-line rule:line-length
+                                              - jobName: '${text.to_lower("tech_report-" + queryType + "-" + text.replace_all_regex(text.replace_all_regex(runDate, "[-:]", ""), "[T.]", "-"))}'
+                                    - logStartJob:
+                                          call: sys.log
+                                          args:
+                                              data: ${"Running Dataflow job:" + jobName}
+                                              severity: INFO
+                                    - launchDataflowFlexTemplate:
+                                          call: launchDataflowFlexTemplate
+                                          args:
+                                              project: ${project}
+                                              region: ${region}
+                                              jobName: ${jobName}
+                                              flexTemplateTemp: ${flexTemplateTemp}
+                                              flexTemplateBasePath: ${flexTemplateBasePath}
+                                              flexTemplateBuildTag: ${flexTemplateBuildTag}
+                                              parameters:
+                                                "query_type": ${queryType}
+                                                "firestore_database": ${firestoreDatabase}
+                                                "firestore_collection": ${firestoreCollection}
+                                                "date": ${runDate}
+                                          result: jobId
+                                    - waitForDataflowCompletion:
+                                          call: waitForDataflowCompletion
+                                          args:
+                                              project: ${project}
+                                              region: ${region}
+                                              jobId: ${jobId}
+                                              status: "JOB_STATE_DONE"
+                                              checkIntervalSeconds: ${checkIntervalSeconds}
+                            retry:
+                                predicate: ${dataflowJobRetryPredicate}
+                                max_retries: 2
+                                backoff:
+                                    initial_delay: 5
+                                    max_delay: 5
+                                    multiplier: 1
+
+# https://dev.to/stack-labs/orchestrate-dataflow-pipelines-easily-with-gcp-workflows-1i8k
+waitForDataflowCompletion:
+    params: [project, region, jobId, status, checkIntervalSeconds]
+    steps:
+        - init:
+              assign:
+                  - currentStatus: ""
+                  - failureStatuses:
+                        [
+                            "JOB_STATE_FAILED",
+                            "JOB_STATE_CANCELLED",
+                            "JOB_STATE_UPDATED",
+                            "JOB_STATE_DRAINED",
+                        ]
+        - check_condition:
+              switch:
+                  - condition: ${currentStatus in failureStatuses}
+                    next: exit_fail
+                  - condition: ${currentStatus != status}
+                    next: iterate
+              next: exit_success
+        - iterate:
+              steps:
+                  - sleep30s:
+                        call: sys.sleep
+                        args:
+                            seconds: ${checkIntervalSeconds}
+                  - getJob:
+                        call: googleapis.dataflow.v1b3.projects.locations.jobs.get
+                        args:
+                            jobId: ${jobId}
+                            location: ${region}
+                            projectId: ${project}
+                        result: getJobResponse
+                  - getStatus:
+                        assign:
+                            - currentStatus: ${getJobResponse.currentState}
+                  - log:
+                        call: sys.log
+                        args:
+                            text: ${"Current Dataflow job status="+currentStatus}
+                            severity: DEBUG
+              next: check_condition
+        - exit_success:
+              return: ${currentStatus}
+        - exit_fail:
+              raise: ${"Job in unexpected terminal status "+currentStatus}
+
+launchDataflowFlexTemplate:
+    params:
+        [
+            project,
+            region,
+            jobName,
+            flexTemplateTemp,
+            flexTemplateBasePath,
+            flexTemplateBuildTag,
+            parameters,
+        ]
+    steps:
+        - logit:
+              call: sys.log
+              args:
+                  data: ${parameters}
+                  severity: DEBUG
+        - launch:
+              call: googleapis.dataflow.v1b3.projects.locations.flexTemplates.launch
+              args:
+                  location: ${region}
+                  projectId: ${project}
+                  body:
+                      launchParameter:
+                          jobName: ${jobName}
+                          environment:
+                              stagingLocation: ${flexTemplateTemp}
+                              tempLocation: ${flexTemplateTemp}
+                              # maxWorkers: 10
+                              additionalUserLabels:
+                                  workflow_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_ID")}
+                                  workflow_execution_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+                                  workflow_revision_id: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_REVISION_ID")}
+                          # yamllint disable-line rule:line-length
+                          containerSpecGcsPath: ${flexTemplateBasePath + "-" + parameters.query_type + "-" + flexTemplateBuildTag + ".json"}
+                          parameters: ${parameters}
+              result: launchResult
+        - logResult:
+              call: sys.log
+              args:
+                  data: ${launchResult}
+                  severity: DEBUG
+        - jobCreated:
+              return: ${launchResult.job.id}
+
+dataflowJobRetryPredicate:
+    params: [e]
+    steps:
+        - logErrorMessage:
+              call: sys.log
+              args:
+                  data: ${"Dataflow workflow step failure"}
+                  severity: ERROR
+        - logException:
+              call: sys.log
+              args:
+                  data: ${e}
+                  severity: ERROR
+        - returnTrue:
+              return: true
