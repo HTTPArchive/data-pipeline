@@ -1,0 +1,36 @@
+{
+    "name": "Technology Report API pipeline",
+    "description": "Runs a pipeline to generate firestore API results",
+    "parameters": [
+        {
+            "name": "query_type",
+            "label":"Query type",
+            "helpText": "Technology query type",
+            "isOptional": true
+        },
+        {
+            "name": "firestore_project",
+            "label":"Firestore project",
+            "helpText": "Google Cloud project with Firestore",
+            "isOptional": true
+        },
+        {
+            "name": "firestore_collection",
+            "label":"Firestore collection",
+            "helpText": "Firestore collection with HTTPArchive data",
+            "isOptional": true
+        },
+        {
+            "name": "firestore_database",
+            "label":"Firestore database",
+            "helpText": "Firestore database with HTTPArchive data",
+            "isOptional": true
+        },
+        {
+            "name": "date",
+            "label":"Date",
+            "helpText": "Date to query",
+            "isOptional": true
+        }
+    ]
+}
