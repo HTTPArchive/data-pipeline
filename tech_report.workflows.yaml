@@ -27,7 +27,7 @@ main:
                   - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
                   - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
                   - runDate: "2024-01-01T00:00:00.00Z"
-                  - queryTypes: ["adoption", "lighthouse", "core_web_vitals"]
+                  - queryTypes: ["adoption", "lighthouse", "core_web_vitals", "page_weight", "technologies", "categories"]
                   - firestoreDatabase: "tech-report-apis-prod"
 
         # run scheduled query
