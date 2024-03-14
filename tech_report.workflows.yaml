@@ -10,11 +10,11 @@ main:
                   data: ${event}
                   severity: DEBUG
 
-        - getEventData:
-              call: decodePubSubEventData
-              args:
-                  event: ${event}
-              result: eventData
+        # - getEventData:
+        #       call: decodePubSubEventData
+        #       args:
+        #           event: ${event}
+        #       result: eventData
         
         - init:
               assign:
