@@ -50,8 +50,7 @@ main:
                 flexTemplateBuildTag: ${flexTemplateBuildTag}
                 project: ${project}
                 region: ${region}
-                firestoreDatabase: ${firestoreCollection}
-                firestoreCollection: ${queryType}
+                firestoreDatabase: ${firestoreDatabase}
                 checkIntervalSeconds: ${checkIntervalSeconds}
         
 
@@ -78,7 +77,6 @@ runDataflowJobs:
             project,
             region,
             firestoreDatabase,
-            firestoreCollection,
             checkIntervalSeconds,
         ]
     steps:
@@ -111,7 +109,7 @@ runDataflowJobs:
                                               parameters:
                                                 "query_type": ${queryType}
                                                 "firestore_database": ${firestoreDatabase}
-                                                "firestore_collection": ${firestoreCollection}
+                                                "firestore_collection": ${queryType}
                                                 "date": ${runDate}
                                           result: jobId
                                     - waitForDataflowCompletion:
