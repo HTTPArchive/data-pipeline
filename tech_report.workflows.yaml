@@ -10,11 +10,11 @@ main:
                   data: ${event}
                   severity: DEBUG
 
-        # - getEventData:
-        #       call: decodePubSubEventData
-        #       args:
-        #           event: ${event}
-        #       result: eventData
+        - getEventData:
+              call: decodePubSubEventData
+              args:
+                  event: ${event}
+              result: eventData
         
         - init:
               assign:
@@ -62,7 +62,9 @@ decodePubSubEventData:
         - decode_pubsub_message:
               assign:
                   - base64: ${base64.decode(event.data.message.data)}
-                  - message: ${text.decode(base64)}
+                  - message:
+                        data: ${text.decode(base64)}
+                        publishTime: ${event.data.message.publishTime}
         - return_pubsub_message:
               return: ${message}
 
