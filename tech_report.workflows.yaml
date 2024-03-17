@@ -23,7 +23,7 @@ main:
                   - region: "us-west1"
                   - scheduledQueryName: "projects/226352634162/locations/us/transferConfigs/65f3657e-0000-291b-8ebf-582429c88ba4"
                   - flexTemplateRepo: "data-pipeline"
-                  - flexTemplateBuildTag: "2024-03-11_01-04-46"
+                  - flexTemplateBuildTag: "2024-03-13_01-08-18"
                   - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
                   - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
                   - inputDate: ${eventData.data}
@@ -31,8 +31,7 @@ main:
                   - queryTypes: ["adoption", "lighthouse", "core_web_vitals", "page_weight", "technologies", "categories"]
                   - firestoreDatabase: "tech-report-apis-prod"
 
-        # run scheduled query
-        - startManualRuns:
+        - runScheduledQuery:
             call: googleapis.bigquerydatatransfer.v1.projects.locations.transferConfigs.startManualRuns
             args:
                 parent: ${scheduledQueryName}
