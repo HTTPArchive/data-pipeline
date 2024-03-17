@@ -26,7 +26,8 @@ main:
                   - flexTemplateBuildTag: "2024-03-11_01-04-46"
                   - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
                   - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
-                  - runDate: "2024-01-01T00:00:00.00Z"
+                  - inputDate: ${eventData.data}
+                  - runDate: ${getFirstOfPreviousMonth(inputDate)}
                   - queryTypes: ["adoption", "lighthouse", "core_web_vitals", "page_weight", "technologies", "categories"]
                   - firestoreDatabase: "tech-report-apis-prod"
 
@@ -67,6 +68,19 @@ decodePubSubEventData:
                         publishTime: ${event.data.message.publishTime}
         - return_pubsub_message:
               return: ${message}
+
+getFirstOfPreviousMonth:
+    params: [inputDate]
+    steps:
+        - parseDate:
+            assign:
+                - currentYear: ${text.substring(inputDate, 0, 4)}
+                - currentMonth: ${text.substring(inputDate, 5, 7)}
+                - previousYear: ${if(currentMonth == "01", int(currentYear) - 1, currentYear)}
+                - previousMonth: ${if(currentMonth == "01", "12", text.substring("0" + string(int(currentMonth) - 1), -2, -1))}
+                - returnDate: ${previousYear + "-" + previousMonth + "-01T00:00:00Z"}
+        - returnDate:
+            return: ${returnDate}
 
 runDataflowJobs:
     params:
