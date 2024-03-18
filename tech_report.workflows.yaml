@@ -15,12 +15,13 @@ main:
               args:
                   event: ${event}
               result: eventData
-        
+
         - init:
               assign:
                   - checkIntervalSeconds: 300
                   - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
                   - region: "us-west1"
+                  # yamllint disable-line rule:line-length
                   - scheduledQueryName: "projects/226352634162/locations/us/transferConfigs/65f3657e-0000-291b-8ebf-582429c88ba4"
                   - flexTemplateRepo: "data-pipeline"
                   - flexTemplateBuildTag: "2024-03-13_01-08-18"
@@ -28,31 +29,33 @@ main:
                   - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
                   - inputDate: ${eventData.data}
                   - runDate: ${getFirstOfPreviousMonth(inputDate)}
+                  # yamllint disable-line rule:line-length
                   - queryTypes: ["adoption", "lighthouse", "core_web_vitals", "page_weight", "technologies", "categories"]
                   - firestoreDatabase: "tech-report-apis-prod"
 
         - runScheduledQuery:
-            call: googleapis.bigquerydatatransfer.v1.projects.locations.transferConfigs.startManualRuns
-            args:
-                parent: ${scheduledQueryName}
-                body:
-                    requestedRunTime: ${runDate}
-            result: startManualRunsResult
+              # yamllint disable-line rule:line-length
+              call: googleapis.bigquerydatatransfer.v1.projects.locations.transferConfigs.startManualRuns
+              args:
+                  parent: ${scheduledQueryName}
+                  body:
+                      requestedRunTime: ${runDate}
+              result: startManualRunsResult
 
         # iterate over technology query types and run flex template
         - runDataflowJobs:
-            call: runDataflowJobs
-            args:
-                queryTypes: ${queryTypes}
-                runDate: ${runDate}
-                flexTemplateTemp: ${flexTemplateTemp}
-                flexTemplateBasePath: ${flexTemplateBasePath}
-                flexTemplateBuildTag: ${flexTemplateBuildTag}
-                project: ${project}
-                region: ${region}
-                firestoreDatabase: ${firestoreDatabase}
-                checkIntervalSeconds: ${checkIntervalSeconds}
-        
+              call: runDataflowJobs
+              args:
+                  queryTypes: ${queryTypes}
+                  runDate: ${runDate}
+                  flexTemplateTemp: ${flexTemplateTemp}
+                  flexTemplateBasePath: ${flexTemplateBasePath}
+                  flexTemplateBuildTag: ${flexTemplateBuildTag}
+                  project: ${project}
+                  region: ${region}
+                  firestoreDatabase: ${firestoreDatabase}
+                  checkIntervalSeconds: ${checkIntervalSeconds}
+
 
 ### SUB-TASKS ###
 
@@ -72,14 +75,15 @@ getFirstOfPreviousMonth:
     params: [inputDate]
     steps:
         - parseDate:
-            assign:
-                - currentYear: ${text.substring(inputDate, 0, 4)}
-                - currentMonth: ${text.substring(inputDate, 5, 7)}
-                - previousYear: ${if(currentMonth == "01", int(currentYear) - 1, currentYear)}
-                - previousMonth: ${if(currentMonth == "01", "12", text.substring("0" + string(int(currentMonth) - 1), -2, -1))}
-                - returnDate: ${previousYear + "-" + previousMonth + "-01T00:00:00Z"}
+              assign:
+                  - currentYear: ${text.substring(inputDate, 0, 4)}
+                  - currentMonth: ${text.substring(inputDate, 5, 7)}
+                  - previousYear: ${if(currentMonth == "01", int(currentYear) - 1, currentYear)}
+                  - previousMonth: |
+                      ${if(currentMonth == "01", "12", text.substring("0" + string(int(currentMonth) - 1), -2, -1))}
+                  - returnDate: ${previousYear + "-" + previousMonth + "-01T00:00:00Z"}
         - returnDate:
-            return: ${returnDate}
+              return: ${returnDate}
 
 runDataflowJobs:
     params:
@@ -122,10 +126,10 @@ runDataflowJobs:
                                               flexTemplateBasePath: ${flexTemplateBasePath}
                                               flexTemplateBuildTag: ${flexTemplateBuildTag}
                                               parameters:
-                                                "query_type": ${queryType}
-                                                "firestore_database": ${firestoreDatabase}
-                                                "firestore_collection": ${queryType}
-                                                "date": ${runDate}
+                                                  "query_type": ${queryType}
+                                                  "firestore_database": ${firestoreDatabase}
+                                                  "firestore_collection": ${queryType}
+                                                  "date": ${runDate}
                                           result: jobId
                                     - waitForDataflowCompletion:
                                           call: waitForDataflowCompletion
