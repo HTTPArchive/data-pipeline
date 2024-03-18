@@ -22,7 +22,7 @@ main:
                   - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
                   - region: "us-west1"
                   - flexTemplateRepo: "data-pipeline"
-                  - flexTemplateBuildTag: "2024-03-13_01-08-18"
+                  - flexTemplateBuildTag: "2024-03-18_08-40-49"
                   - flexTemplateBasePath: ${"gs://" + project + "/dataflow/templates/" + flexTemplateRepo}
                   - flexTemplateTemp: ${"gs://" + project + "-staging/dataflow"}
 
