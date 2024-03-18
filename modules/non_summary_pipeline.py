@@ -12,7 +12,8 @@ import apache_beam as beam
 from modules import utils, constants, transformation
 
 # BigQuery can handle rows up to 100 MB.
-MAX_CONTENT_SIZE = 2 * 1024 * 1024
+MAX_CONTENT_SIZE = 100 * 1000000
+MAX_BODY_CONTENT_SIZE = 20 * 1000000
 # Number of times to partition the requests tables.
 NUM_PARTITIONS = 4
 
@@ -202,6 +203,12 @@ def get_response_bodies(har):
     """Parses response bodies from a HAR object."""
 
     page_url = get_page_url(har)
+    if not page_url:
+        logging.warning(
+            "Skipping response bodies: unable to get page URL (see preceding warning)."
+        )
+        return None
+
     requests = har.get("log").get("entries")
 
     response_bodies = []
@@ -215,12 +222,13 @@ def get_response_bodies(har):
         if body is None:
             continue
 
-        truncated = len(body) > MAX_CONTENT_SIZE
+        truncated = len(body) > MAX_BODY_CONTENT_SIZE
         if truncated:
             logging.warning(
                 'Truncating response body for "%s". Response body size %s exceeds limit %s.'
-                % (request_url, len(body), MAX_CONTENT_SIZE)
+                % (request_url, len(body), MAX_BODY_CONTENT_SIZE)
             )
+            body = body[:MAX_BODY_CONTENT_SIZE]
 
         metadata = get_metadata(har)
 
@@ -228,7 +236,7 @@ def get_response_bodies(har):
             {
                 "page": page_url,
                 "url": request_url,
-                "body": body[:MAX_CONTENT_SIZE],
+                "body": body,
                 "truncated": truncated,
                 "date": har["date"],
                 "client": har["client"],
@@ -247,6 +255,13 @@ def get_technologies(har):
 
     page = har.get("log").get("pages")[0]
     page_url = page.get("_URL")
+
+    if not page_url:
+        logging.warning(
+            "Skipping technologies: unable to get page URL (see preceding warning)."
+        )
+        return None
+
     app_names = page.get("_detected_apps", {})
     categories = page.get("_detected", {})
     metadata = get_metadata(har)
@@ -430,7 +445,11 @@ def to_json(obj):
     if not obj:
         raise ValueError
 
-    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+    return (
+        json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+        .encode("utf-8", "surrogatepass")
+        .decode("utf-8", "replace")
+    )
 
 
 def from_json(file_name, element):
