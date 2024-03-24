@@ -35,16 +35,18 @@ The new HTTP Archive data pipeline built entirely on GCP
 
 ## Introduction
 
-This repo handles the HTTP Archive data pipeline, which takes the results of the monthly HTTP Archive run and saves this to the `httparchive` dataset in BigQuery.
+### Technology Report pipeline
 
-A secondary pipeline is responsible for populating the Technology Report Firestore collections.
+The Technology Report (`tech_report`) pipeline saves data to a Firestore database (e.g. `tech-report-apis-prod`) across various collections ([see `TECHNOLOGY_QUERIES` in constants.py](modules/constants.py))
+
+### Main pipeline
+
+This repo handles the HTTP Archive data pipeline, which takes the results of the monthly HTTP Archive run and saves this to the `httparchive` dataset in BigQuery.
 
 There are currently two main pipelines:
 
 - The `all` pipeline which saves data to the new `httparchive.all` dataset
 - The `combined` pipline which saves data to the legacy tables. This processes both the `summary` tables (`summary_pages` and `summary_requests`) and `non-summary` pipeline (`pages`, `requests`, `response_bodies`....etc.)
-
-The secondary `tech_report` pipeline saves data to a Firestore database (e.g. `tech-report-apis-prod`) across various collections ([see `TECHNOLOGY_QUERIES` in constants.py](modules/constants.py))
 
 The pipelines are run in Google Cloud Platform (GCP) and are kicked off automatically on crawl completion, based on the code in the `main` branch which is deployed to GCP on each merge.
 

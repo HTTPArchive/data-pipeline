@@ -35,7 +35,10 @@ jobs:
         run: exit 1
       - name: Update Cloud Workflow build tag
         # yamllint disable rule:line-length
-        run: sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".*"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' data-pipeline.workflows.yaml
+        run: |
+          for i in *.workflows.yaml; do
+            sed -ri 's/^(\s*-\sflexTemplateBuildTag:)(\s".*"$)/\1 "${{ steps.build_flex_template.outputs.BUILD_TAG }}"/' $i
+          done
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v6
