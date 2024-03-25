@@ -5,10 +5,8 @@ from __future__ import absolute_import
 import argparse
 import json
 import logging
-import re
 from copy import deepcopy
 from functools import partial
-from hashlib import sha256
 from typing import Union, Dict
 
 import apache_beam as beam
@@ -243,7 +241,6 @@ def get_summary_pages(max_content_size, file_name, har):
     page = har.get("log").get("pages")[0]
     url = page.get("_URL")
     date = "{:%Y_%m_%d}".format(date)
-    wptid = page.get("testID")
 
     metadata = get_metadata(har)
     if metadata:
@@ -288,7 +285,6 @@ def get_summary_requests(max_content_size, file_name, har):
     page = har.get("log").get("pages")[0]
     url = page.get("_URL")
     date = "{:%Y_%m_%d}".format(date)
-    wptid = page.get("testID")
 
     metadata = get_metadata(har)
     if metadata:
@@ -348,7 +344,6 @@ def get_technologies(max_content_size, file_name, har):
     page = har.get("log").get("pages")[0]
     page_url = page.get("_URL")
     date = "{:%Y_%m_%d}".format(date)
-    wptid = page.get("testID")
 
     metadata = get_metadata(har)
     if metadata:
@@ -356,10 +351,6 @@ def get_technologies(max_content_size, file_name, har):
         # See https://github.com/HTTPArchive/data-pipeline/issues/48
         page_url = metadata.get("tested_url", page_url)
         client = metadata.get("layout", client).lower()
-
-    is_root_page = True
-    if metadata:
-        is_root_page = metadata.get("crawl_depth") == 0
 
     if not page:
         return None
@@ -394,7 +385,7 @@ def get_technologies(max_content_size, file_name, har):
             if app is None:
                 app = app_id
             else:
-                info = app_id[len(app) :].strip()
+                info = app_id[len(app):].strip()
 
             app_list.append(
                 {
