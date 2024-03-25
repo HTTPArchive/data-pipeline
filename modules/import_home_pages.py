@@ -141,30 +141,31 @@ def get_parsed_css(max_content_size, file_name, har):
         url = entry.get("url")
         ast = entry.get("ast")
 
-        if url == 'inline':
+        if url == "inline":
             # Skip inline styles for now. They're special.
             continue
 
         try:
             ast_json = to_json(ast)
         except Exception:
-            logging.warning(
-                'Unable to stringify parsed CSS to JSON for "%s".'
-                % url
-            )
+            logging.warning('Unable to stringify parsed CSS to JSON for "%s".' % url)
             continue
 
-        if json_exceeds_max_content_size(ast_json, max_content_size, "parsed_css", wptid):
+        if json_exceeds_max_content_size(
+            ast_json, max_content_size, "parsed_css", wptid
+        ):
             continue
 
-        parsed_css.append({
-            "date": date,
-            "client": client,
-            "page": page_url,
-            "is_root_page": is_root_page,
-            "url": url,
-            "css": ast_json
-        })
+        parsed_css.append(
+            {
+                "date": date,
+                "client": client,
+                "page": page_url,
+                "is_root_page": is_root_page,
+                "url": url,
+                "css": ast_json,
+            }
+        )
 
     return parsed_css
 
@@ -197,7 +198,11 @@ def get_lighthouse(max_content_size, file_name, har):
         client = metadata.get("layout", client).lower()
 
     # Omit large UGC.
-    if report.get("audits") and report.get("audits").get("screenshot-thumbnails", {}) and report.get("audits").get("screenshot-thumbnails", {}).get("details", {}):
+    if (
+        report.get("audits")
+        and report.get("audits").get("screenshot-thumbnails", {})
+        and report.get("audits").get("screenshot-thumbnails", {}).get("details", {})
+    ):
         report.get("audits").get("screenshot-thumbnails", {}).get("details", {}).pop(
             "items", None
         )
@@ -389,7 +394,7 @@ def get_technologies(max_content_size, file_name, har):
             if app is None:
                 app = app_id
             else:
-                info = app_id[len(app):].strip()
+                info = app_id[len(app) :].strip()
 
             app_list.append(
                 {
@@ -492,10 +497,14 @@ def get_response_bodies(max_content_size, file_name, har):
         if truncated:
             logging.warning(
                 'Truncating response body for "%s". Response body size %s exceeds limit %s.'
-                % (request_url, len(response_body), constants.MaxContentSize.RESPONSE_BODIES.value)
+                % (
+                    request_url,
+                    len(response_body),
+                    constants.MaxContentSize.RESPONSE_BODIES.value,
+                )
             )
 
-        response_body = response_body[:constants.MaxContentSize.RESPONSE_BODIES.value]
+        response_body = response_body[: constants.MaxContentSize.RESPONSE_BODIES.value]
 
         metadata = get_metadata(har)
 
@@ -509,7 +518,9 @@ def get_response_bodies(max_content_size, file_name, har):
             "metadata": metadata,
         }
 
-        if json_exceeds_max_content_size(ret, max_content_size, "response_bodies", wptid):
+        if json_exceeds_max_content_size(
+            ret, max_content_size, "response_bodies", wptid
+        ):
             continue
 
         requests.append(ret)
@@ -583,7 +594,10 @@ def from_json(file_name, string):
     try:
         return [(file_name, json.loads(string))]
     except json.JSONDecodeError as err:
-        logging.error('Unable to parse file %s into JSON object "%s...": %s' % (file_name, string[:50], err))
+        logging.error(
+            'Unable to parse file %s into JSON object "%s...": %s'
+            % (file_name, string[:50], err)
+        )
         return None
 
 
@@ -675,11 +689,17 @@ def create_pipeline(argv=None):
 
     _ = (
         hars
-        | "MapLighthouse" >> beam.FlatMapTuple(partial(get_lighthouse, max_content_size))
-        | "WriteLighthouse" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_lighthouse_home_only),
+        | "MapLighthouse"
+        >> beam.FlatMapTuple(partial(get_lighthouse, max_content_size))
+        | "WriteLighthouse"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_lighthouse_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["lighthouse"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["lighthouse_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "lighthouse_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
@@ -687,10 +707,15 @@ def create_pipeline(argv=None):
     _ = (
         hars
         | "MapPages" >> beam.FlatMapTuple(partial(get_page, max_content_size))
-        | "WritePages" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_pages_home_only),
+        | "WritePages"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_pages_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["pages"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["pages_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "pages_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
@@ -698,10 +723,15 @@ def create_pipeline(argv=None):
     _ = (
         hars
         | "MapParsedCSS" >> beam.FlatMapTuple(partial(get_parsed_css, max_content_size))
-        | "WriteParsedCSS" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_parsed_css_home_only),
+        | "WriteParsedCSS"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_parsed_css_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["parsed_css"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["parsed_css_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "parsed_css_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
@@ -709,54 +739,83 @@ def create_pipeline(argv=None):
     _ = (
         hars
         | "MapRequests" >> beam.FlatMapTuple(partial(get_requests, max_content_size))
-        | "WriteRequests" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_requests_home_only),
+        | "WriteRequests"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_requests_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["requests"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["requests_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "requests_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
 
     _ = (
         hars
-        | "MapResponseBodies" >> beam.FlatMapTuple(partial(get_response_bodies, max_content_size))
-        | "WriteResponseBodies" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_response_bodies_home_only),
+        | "MapResponseBodies"
+        >> beam.FlatMapTuple(partial(get_response_bodies, max_content_size))
+        | "WriteResponseBodies"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_response_bodies_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["response_bodies"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["response_bodies_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "response_bodies_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
 
     _ = (
         hars
-        | "MapSummaryPages" >> beam.FlatMapTuple(partial(get_summary_pages, max_content_size))
-        | "WriteSummaryPages" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_summary_pages_home_only),
+        | "MapSummaryPages"
+        >> beam.FlatMapTuple(partial(get_summary_pages, max_content_size))
+        | "WriteSummaryPages"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_summary_pages_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["summary_pages"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["summary_pages_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "summary_pages_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
 
     _ = (
         hars
-        | "MapSummaryRequests" >> beam.FlatMapTuple(partial(get_summary_requests, max_content_size))
-        | "WriteSummaryRequests" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_summary_requests_home_only),
+        | "MapSummaryRequests"
+        >> beam.FlatMapTuple(partial(get_summary_requests, max_content_size))
+        | "WriteSummaryRequests"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_summary_requests_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["summary_requests"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["summary_requests_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "summary_requests_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
 
     _ = (
         hars
-        | "MapTechnologies" >> beam.FlatMapTuple(partial(get_technologies, max_content_size))
-        | "WriteTechnologies" >> transformation.WriteBigQuery(
-            table=lambda row: utils.format_table_name(row, home_pages_pipeline_options.dataset_technologies_home_only),
+        | "MapTechnologies"
+        >> beam.FlatMapTuple(partial(get_technologies, max_content_size))
+        | "WriteTechnologies"
+        >> transformation.WriteBigQuery(
+            table=lambda row: utils.format_table_name(
+                row, home_pages_pipeline_options.dataset_technologies_home_only
+            ),
             schema=constants.BIGQUERY["schemas"]["technologies"],
-            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"]["technologies_home"],
+            additional_bq_parameters=constants.BIGQUERY["additional_bq_parameters"][
+                "technologies_home"
+            ],
             **home_pages_pipeline_options.get_all_options(),
         )
     )
