@@ -85,7 +85,7 @@ class WriteBigQuery(beam.PTransform):
             "create_disposition": BigQueryDisposition.CREATE_IF_NEEDED,
             "write_disposition": BigQueryDisposition.WRITE_APPEND,
             "additional_bq_parameters": {
-                "maxBadRecords": 10,
+                "maxBadRecords": 100,
                 "ignoreUnknownValues": True,
                 **self.additional_bq_parameters,
             },
@@ -411,6 +411,7 @@ class HarJsonToSummary:
                     f"The first request ({url}) failed with status {status}. status_info={status_info}"
                 )
                 return None, None, None, None
+
             # This is the first URL found associated with the page - assume it's the base URL.
             first_req = True
             first_url = url
