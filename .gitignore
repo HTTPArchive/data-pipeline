@@ -9,6 +9,8 @@
 /.vscode
 .coverage
 .tool-versions
+.DS_Store
+**/.DS_Store
 
 # Ignore generated credentials from google-github-actions/auth
 gha-creds-*.json

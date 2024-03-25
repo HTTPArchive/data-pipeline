@@ -18,16 +18,16 @@ BIGQUERY = {
         "requests_all": "httparchive:experimental_requests",
         "response_bodies_all": "httparchive:experimental_response_bodies",
         "parsed_css_all": "httparchive:experimental_parsed_css",
-        "summary_pages_home": "httparchive:summary_pages",
-        "summary_requests_home": "httparchive:summary_requests",
-        "pages_home": "httparchive:pages",
-        "technologies_home": "httparchive:technologies",
-        "lighthouse_home": "httparchive:lighthouse",
-        "requests_home": "httparchive:requests",
-        "response_bodies_home": "httparchive:response_bodies",
+        "summary_pages_home": "httparchive:z_test_summary_pages",
+        "summary_requests_home": "httparchive:z_test_summary_requests",
+        "pages_home": "httparchive:z_test_pages",
+        "technologies_home": "httparchive:z_test_technologies",
+        "lighthouse_home": "httparchive:z_test_lighthouse",
+        "requests_home": "httparchive:z_test_requests",
+        "response_bodies_home": "httparchive:z_test_response_bodies",
         "all_pages": "httparchive:all.pages",
         "all_requests": "httparchive:all.requests",
-        "parsed_css_home": "httparchive:experimental_parsed_css",
+        "parsed_css_home": "httparchive:z_test_experimental_parsed_css",
     },
     "schemas": {
         "summary_pages": {"fields": _get_schema("summary_pages.json")},
@@ -52,6 +52,30 @@ BIGQUERY = {
         "all_requests": {
             'timePartitioning': {'type': 'DAY', 'field': 'date', 'requirePartitionFilter': True},
             'clustering': {'fields': ['client', 'is_root_page', 'is_main_document', 'type']},
+            'maxBadRecords': 100,
+        },
+        "lighthouse_home": {
+            'maxBadRecords': 100,
+        },
+        "parsed_css_home": {
+            'maxBadRecords': 100,
+        },
+        "pages_home": {
+            'maxBadRecords': 100,
+        },
+        "requests_home": {
+            'maxBadRecords': 100,
+        },
+        "response_bodies_home": {
+            'maxBadRecords': 100,
+        },
+        "summary_pages_home": {
+            'maxBadRecords': 100,
+        },
+        "summary_requests_home": {
+            'maxBadRecords': 100,
+        },
+        "technologies_home": {
             'maxBadRecords': 100,
         },
     },

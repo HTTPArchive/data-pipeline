@@ -25,7 +25,7 @@ substitutions:
   _TEMPLATE_IMAGE: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_PIPELINE_NAME}:${_BUILD_TAG}'
   _TEMPLATE_PATH: 'gs://${PROJECT_ID}/dataflow/templates/${_PIPELINE_NAME}-${_BUILD_TAG}.json'
   _TEMPLATE_METADATA: 'flex_template_metadata_${_TYPE}.json'
-  _WORKER_TYPE: 'n1-standard-32'
+  _WORKER_TYPE: 'n1-standard-96'
 
 options:
   dynamic_substitutions: true

@@ -1,6 +1,9 @@
 #!/bin/bash
-python run_all.py \
-  --input_file=gs://httparchive/crawls_manifest/android-Sep_1_2023.txt \
+# shellcheck disable=SC1143,SC2211,SC2215
+  # --input_file=gs://httparchive/crawls_manifest/test-manifest-mobile-both.txt \
+  # --input_file=gs://httparchive/crawls_manifest/chrome-Feb_1_2024_home-only.txt \
+python3 run_home_pages.py \
+  --input_file=gs://httparchive/crawls_manifest/chrome-Feb_1_2024_home-only.txt \
   --runner=DataflowRunner \
   --project=httparchive \
   --temp_location=gs://httparchive-staging/experimental/temp \
