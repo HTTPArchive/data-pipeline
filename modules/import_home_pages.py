@@ -267,19 +267,6 @@ def get_summary_requests(max_content_size, file_name, har):
     if not is_home_page(har):
         return None
 
-    date, client = utils.date_and_client_from_file_name(file_name)
-
-    page = har.get("log").get("pages")[0]
-    url = page.get("_URL")
-    date = "{:%Y_%m_%d}".format(date)
-
-    metadata = get_metadata(har)
-    if metadata:
-        # The page URL from metadata is more accurate.
-        # See https://github.com/HTTPArchive/data-pipeline/issues/48
-        url = metadata.get("tested_url", url)
-        client = metadata.get("layout", client).lower()
-
     try:
         _, requests = HarJsonToSummary.generate_pages(file_name, har)
     except Exception:
