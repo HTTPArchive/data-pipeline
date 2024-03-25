@@ -236,9 +236,6 @@ def get_summary_pages(max_content_size, file_name, har):
     if not is_home_page(har):
         return None
 
-    page = har.get("log").get("pages")[0]
-    url = page.get("_URL")
-
     summary_page = None
     try:
         summary_page, _ = HarJsonToSummary.generate_pages(file_name, har)
