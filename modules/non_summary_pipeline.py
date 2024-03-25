@@ -213,8 +213,6 @@ def hash_url(url):
 def get_response_bodies(har):
     """Parses response bodies from a HAR object."""
 
-    return None
-
     if not har:
         return None
 
