@@ -1,4 +1,4 @@
 apache-beam[gcp]==2.54.0
 google-cloud-firestore==2.14.0
-black==24.3.0
+black==24.4.0
 coverage>=6.4.4
