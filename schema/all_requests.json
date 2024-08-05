@@ -51,7 +51,7 @@
         "name": "index",
         "type": "INTEGER",
         "mode": "NULLABLE",
-        "description": "The sequential 0-based index of the request"
+        "description": "The sequential 1-based index of the request"
     },
     {
         "name": "payload",
