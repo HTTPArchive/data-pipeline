@@ -1,4 +1,7 @@
+**Deprecated**. The next version of the data pipeline: https://github.com/HTTPArchive/dataform
+
 # data-pipeline
+
 The new HTTP Archive data pipeline built entirely on GCP
 
 ![GitHub branch checks state](https://github.com/HTTPArchive/data-pipeline/actions/workflows/code-static-analysis.yml/badge.svg?branch=main)
